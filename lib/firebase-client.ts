@@ -1,5 +1,9 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth, connectAuthEmulator } from "firebase/auth";
+import {
+  initializeAuth,
+  browserLocalPersistence,
+  connectAuthEmulator,
+} from "firebase/auth";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 export function firebaseClient() {
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
@@ -13,7 +17,7 @@ export function firebaseClient() {
       storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
       appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
     });
-  const auth = getAuth(app),
+  const auth = initializeAuth(app, { persistence: browserLocalPersistence }),
     storage = getStorage(app);
   if (
     process.env.NEXT_PUBLIC_USE_EMULATORS === "true" &&

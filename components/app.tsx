@@ -151,6 +151,7 @@ export function App() {
       setReady(true);
       setError("");
       if (!u) {
+        setMenu(false);
         setWs("");
         setScreen("dashboard");
         setEditing(null);

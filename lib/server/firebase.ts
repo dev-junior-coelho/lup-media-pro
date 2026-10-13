@@ -5,6 +5,7 @@ import { getStorage } from "firebase-admin/storage";
 export function admin() {
   const projectId =
     process.env.GOOGLE_CLOUD_PROJECT ??
+    process.env.GCLOUD_PROJECT ??
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
   if (!projectId) throw Error("Firebase não configurado.");
   const app =

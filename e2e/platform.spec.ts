@@ -28,6 +28,15 @@ test("cadastro, login, rascunho, mídia, agenda, cancelamento e migração", asy
   });
   const user = await admin().auth.getUserByEmail(email);
   const ws = user.uid;
+  const other = await page.request.post(
+    "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-api-key",
+    { data: { email: `other-${email}`, password, returnSecureToken: true } },
+  );
+  const otherToken = (await other.json()).idToken;
+  const denied = await page.request.get("/api/state", {
+    headers: { Authorization: `Bearer ${otherToken}`, "x-workspace-id": ws },
+  });
+  expect(denied.status()).toBe(403);
   async function navigate(label: string) {
     if (isMobile)
       await page
@@ -147,13 +156,11 @@ test("cadastro, login, rascunho, mídia, agenda, cancelamento e migração", asy
     JSON.stringify([{ string_list_data: [{ value: "other" }] }]),
   );
   page.once("dialog", (d) => d.accept());
-  await page
-    .locator("#zip")
-    .setInputFiles({
-      name: "instagram.zip",
-      mimeType: "application/zip",
-      buffer: await zip.generateAsync({ type: "nodebuffer" }),
-    });
+  await page.locator("#zip").setInputFiles({
+    name: "instagram.zip",
+    mimeType: "application/zip",
+    buffer: await zip.generateAsync({ type: "nodebuffer" }),
+  });
   await expect(page.locator(".notification")).toContainText("concluída");
   await navigate("Seguidores");
   await page.getByRole("button", { name: "Concluídos", exact: true }).click();
@@ -167,13 +174,11 @@ test("cadastro, login, rascunho, mídia, agenda, cancelamento e migração", asy
   expect(backup.followers.completed).toContain(handle);
   expect(backup.mediaIncluded).toBe(false);
   page.once("dialog", (d) => d.accept());
-  await page
-    .locator("#backup")
-    .setInputFiles({
-      name: "backup.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify(backup)),
-    });
+  await page.locator("#backup").setInputFiles({
+    name: "backup.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(backup)),
+  });
   await expect(page.locator(".notification")).toContainText("concluída");
   await navigate("Seguidores");
   await page.getByRole("button", { name: "Concluídos", exact: true }).click();

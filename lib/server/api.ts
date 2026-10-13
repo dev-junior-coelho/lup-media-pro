@@ -65,8 +65,22 @@ export async function api(req: Request, path: string[]) {
   const { db, bucket } = admin(),
     base = workspacePath(ws);
   const [resource, id, action] = path;
-  if (resource === "migration" && id === "original" && req.method === "GET")
+  if (id && !/^[a-zA-Z0-9_-]{1,128}$/.test(id))
+    throw new HttpError(400, "Identificador inválido.");
+  if (resource === "migration" && id === "original" && req.method === "GET") {
+    if (
+      !(
+        process.env.FIRESTORE_EMULATOR_HOST &&
+        process.env.GOOGLE_CLOUD_PROJECT?.startsWith("demo-")
+      ) &&
+      uid !== process.env.LEGACY_MIGRATION_OWNER_UID
+    )
+      throw new HttpError(
+        403,
+        "A lista original está restrita ao proprietário configurado. Restaure seu backup para migrar os próprios dados.",
+      );
     return Response.json({ users: originalUsers });
+  }
   const audit = async (a: string, entity: string) =>
     db
       .collection(`${base}/audit`)

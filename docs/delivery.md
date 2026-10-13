@@ -17,6 +17,8 @@ Implementação executável em Next.js e Firebase; não é declarada como SaaS f
 - CSV com dados internos reais; métricas sem autorização mostram Dado indisponível. IA e anúncios explicitamente não habilitados.
 - CI e workflow manual de deploy com Workload Identity Federation, dependentes da configuração externa.
 
+Repositório privado: https://github.com/dev-junior-coelho/lup-media-pro
+
 ## Infraestrutura real
 
 Projeto Firebase independente lup-media-pro e app Web criados. Firestore nam5 criado, regras/índices publicados e Authentication e-mail/senha habilitado. App Hosting, Storage e Functions ainda não estão implantados/ativos. App Hosting rejeitou habilitação por falta de plano Blaze.
@@ -25,11 +27,13 @@ Projeto Firebase independente lup-media-pro e app Web criados. Firestore nam5 cr
 
 ## Validação
 
-Resultados finais serão registrados após a última execução dos testes. Testes de Meta são simulados; sucesso dos testes não significa conexão real com @junior_coelho36.
+Resultados: **25 testes unitários**, **3 testes de regras Firestore/Storage** e **4 testes Playwright (desktop/mobile)** aprovados. TypeScript e ESLint aprovados, build de Functions aprovado. Build de produção Next.js aprovado. Total: **32 testes aprovados**. Os testes E2E usam Auth, Firestore e Storage reais em emuladores, incluindo cadastro/login/recuperação, autorização entre usuários na API, criação/edição de rascunho, JPEG, agenda/reagenda/cancelamento, ZIP, migração, marcações preservadas e backup/restauração. Testes de Meta são simulados; sucesso dos testes não significa conexão real com @junior_coelho36.
+
+Auditoria npm das dependências de produção: zero vulnerabilidades tanto na aplicação quanto em Functions. A cadeia de ferramentas de desenvolvimento ainda contém advisories transitivos (Firebase CLI/ESLint); não é correto afirmar que a auditoria de todas as dependências está limpa.
 
 ## Pendências externas
 
-Habilitar Blaze no projeto independente; fornecer App ID e inserir App Secret no Secret Manager; criar chave AES e permissões IAM; provisionar bucket e App Hosting; obter origem HTTPS real. Teste real de publicação somente com autorização explícita do proprietário.
+Habilitar Blaze no projeto independente; configurar LEGACY_MIGRATION_OWNER_UID para restringir a lista original ao seu proprietário; fornecer App ID e inserir App Secret no Secret Manager; criar chave AES e permissões IAM; provisionar bucket e App Hosting; obter origem HTTPS real. Teste real de publicação somente com autorização explícita do proprietário.
 
 ## Limitações
 

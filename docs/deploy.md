@@ -21,7 +21,7 @@ Emuladores: `npm run emulators` (projeto demo-lup-media-pro, Java 21). Para o fr
 3. Criar META_APP_SECRET no Secret Manager e inserir o segredo do aplicativo já existente. Criar TOKEN_ENCRYPTION_KEY com 32 bytes aleatórios codificados em base64, mantendo o valor somente no gerenciador de segredos.
 4. Configurar `.env` não versionado de Functions com META_API_VERSION e FIREBASE_STORAGE_BUCKET reais. `firebase deploy --only firestore,storage,functions --project lup-media-pro`.
 5. Conceder às contas de execução acesso restrito aos segredos/bucket e signBlob. Não distribuir tokens a editores.
-6. Criar backend App Hosting para Next.js, conectar repositório privado e branch validada. Node 22 e build `npm run build`. Preencher valores públicos do Firebase com disponibilidade BUILD/RUNTIME; segredo somente RUNTIME. META_APP_ID, META_API_VERSION, FIREBASE_STORAGE_BUCKET e GOOGLE_CLOUD_PROJECT são valores do servidor. Registrar APP_ORIGIN a partir da URL HTTPS verificada do backend. Conceder acesso aos secrets ao backend.
+6. Criar backend App Hosting para Next.js, conectar repositório privado e branch validada. Node 22 e build `npm run build`. Preencher valores públicos do Firebase com disponibilidade BUILD/RUNTIME; segredo somente RUNTIME. LEGACY_MIGRATION_OWNER_UID é o UID Firebase do proprietário original (não permite distribuir a lista pessoal a outros usuários). META_APP_ID, META_API_VERSION, FIREBASE_STORAGE_BUCKET e GOOGLE_CLOUD_PROJECT são valores do servidor. Registrar APP_ORIGIN a partir da URL HTTPS verificada do backend. Conceder acesso aos secrets ao backend.
 7. Cadastrar essa origem no Firebase Auth e a URL completa `/api/auth/instagram/callback` no aplicativo Meta.
 8. Validar login, upload privado, OAuth e reconexão. Preparar uma imagem JPEG e rascunho de teste; solicitar confirmação explícita antes de enviar à conta real.
 
@@ -31,7 +31,7 @@ Somente `instagram_business_basic` e `instagram_business_content_publish`. A con
 
 ## CI/CD
 
-A workflow valida TypeScript, lint, unitários, Functions, regras e E2E. Deploy deve usar Workload Identity Federation, sem JSON de conta de serviço no GitHub. App Hosting deve apontar a uma branch que só recebe alterações depois dessa workflow. Não há deploy automático configurado sem infraestrutura/faturamento/identidade do backend.
+A workflow valida TypeScript, lint, unitários, Functions, regras e E2E. Deploy deve usar Workload Identity Federation, sem JSON de conta de serviço no GitHub. App Hosting deve apontar a uma branch que só recebe alterações depois dessa workflow. A workflow manual deploy.yml está implementada e repete as validações antes de publicar regras, Storage, Functions e o commit específico no App Hosting. Depende de FIREBASE_WIF_PROVIDER, FIREBASE_DEPLOY_SERVICE_ACCOUNT e APP_HOSTING_BACKEND_ID configurados no ambiente production do GitHub; esses valores ainda não foram provisionados.
 
 ## Fontes consultadas
 

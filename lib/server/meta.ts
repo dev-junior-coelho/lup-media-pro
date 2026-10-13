@@ -47,7 +47,9 @@ export class MetaClient {
     if (!r.ok || data.error)
       throw new MetaError(
         data.error?.code ?? r.status,
-        Boolean(data.error?.is_transient) || r.status >= 500,
+        Boolean(data.error?.is_transient) ||
+          [4, 17, 32, 613].includes(data.error?.code) ||
+          r.status >= 500,
         method === "POST" && path.endsWith("/media_publish") && r.status >= 500,
       );
     return data;
