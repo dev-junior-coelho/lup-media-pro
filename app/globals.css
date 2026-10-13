@@ -1,0 +1,470 @@
+@import "tailwindcss";
+@import "./original.css";
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+textarea {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+.sidebar .sidenav button svg {
+  width: 19px;
+  height: 19px;
+}
+.workspace {
+  padding-bottom: 50px;
+}
+.protitle h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.auth-shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: radial-gradient(at top right, #e5d9f9, transparent 60%), #f6f7fb;
+}
+.auth-card {
+  max-width: 450px;
+  width: 100%;
+  padding: 32px;
+}
+.auth-card h1 {
+  font-size: 29px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  margin: 12px 0;
+}
+.auth-card .logo {
+  background: linear-gradient(125deg, #7c23f4, #e119be, #ff8c21);
+  color: white;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+}
+.auth-card label {
+  display: block;
+  margin: 15px 0 6px;
+  font-size: 13px;
+}
+.auth-card p {
+  color: #78839c;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.auth-card button {
+  margin-top: 12px;
+}
+.error-alert {
+  color: #9d2543;
+  background: #fff0f3;
+  border: 1px solid #f7d4dc;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin: 12px 0;
+}
+.success-alert {
+  background: #e6f7ef;
+  color: #176b4b;
+  padding: 12px;
+  border-radius: 10px;
+}
+.busy {
+  opacity: 0.65;
+  pointer-events: none;
+}
+.empty-state {
+  padding: 30px 12px;
+  text-align: center;
+  color: #78839c;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.empty-state svg {
+  margin: 0 auto 10px;
+  color: #aa8ad0;
+}
+.nav-label {
+  flex: 1;
+}
+.profilebubble button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.toolbar .proinput {
+  flex: 1;
+  min-width: 180px;
+}
+.toolbar .proselect {
+  width: auto;
+  max-width: 100%;
+}
+.button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.calendargrid .daycell {
+  position: relative;
+}
+.calendargrid .daycell .calevent {
+  white-space: normal;
+}
+.daycell .event-button {
+  border: 0;
+  padding: 4px;
+  background: #f1e9fa;
+  color: #823dc1;
+  border-radius: 5px;
+  font-size: 10px;
+  text-align: left;
+}
+.calendar-week .daycell {
+  min-height: 220px;
+}
+.calendar-list {
+  display: block;
+  border: 0;
+}
+.mediaupload {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.mediaupload .mediathumb {
+  height: 96px;
+}
+.mediathumb .move {
+  top: auto;
+  bottom: 4px;
+  right: 28px;
+}
+.mediathumb .next {
+  top: auto;
+  bottom: 4px;
+  right: 4px;
+}
+.libtile .libfoot {
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.libtile .mediaimg img,
+.libtile .mediaimg video {
+  object-fit: contain;
+}
+.account-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  margin: 10px 0;
+}
+.account-card .info {
+  flex: 1;
+}
+.statuspill.failed {
+  background: #fff0f0;
+  color: #b62e4b;
+}
+.statuspill.processing {
+  background: #fff3df;
+  color: #9b620c;
+}
+.itemcore {
+  overflow-wrap: anywhere;
+}
+.itemactions {
+  flex-wrap: wrap;
+}
+.itemactions button {
+  min-height: 34px;
+}
+.quick-shell .gradientbtn {
+  display: block;
+  text-decoration: none;
+}
+.profile .row-actions button {
+  min-height: 40px;
+}
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: #171e3c77;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+.dialog-panel {
+  max-width: 550px;
+  width: 100%;
+  max-height: 85dvh;
+  overflow: auto;
+}
+.reports-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.reports-grid strong {
+  font-size: 30px;
+}
+.toast.show {
+  max-width: 90vw;
+}
+.footer-note {
+  color: #8792a4;
+  font-size: 11px;
+  margin: 25px 0;
+}
+.upload-progress {
+  font-size: 12px;
+  color: #8443b7;
+}
+h2,
+h3 {
+  font-weight: 750;
+}
+.settingbox input {
+  margin: 7px 0;
+}
+.sidebar .sidebrand {
+  margin-bottom: 28px;
+}
+.sidebar .sidefoot {
+  margin-top: 25px;
+}
+.mobilemenu {
+  align-items: center;
+  justify-content: center;
+}
+.mobilemenu svg {
+  width: 20px;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+label small {
+  color: #8792a4;
+}
+.metrics .metric {
+  box-shadow: none;
+}
+.followershost .shell {
+  max-width: none;
+  padding: 0;
+  margin-top: 0;
+}
+.follow-list {
+  max-height: 700px;
+  overflow: auto;
+}
+.history-row {
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+}
+.history-row .info {
+  overflow-wrap: anywhere;
+}
+.settings-grid {
+  align-items: start;
+}
+.librarygrid {
+  margin-top: 18px;
+}
+.screen {
+  min-width: 0;
+}
+.stats-caption {
+  font-size: 12px;
+  color: #8792a4;
+}
+.topbar-right {
+  flex-shrink: 0;
+}
+.sidenav button:focus-visible {
+  outline-color: #e9b0ff;
+}
+.daycell .day-add {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  flex: 1;
+  width: 100%;
+  padding: 0;
+  min-height: 30px;
+}
+.user-email {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+.info-alert {
+  line-height: 1.6;
+}
+.formlabel {
+  font-weight: 700;
+}
+.procard .protitle {
+  flex-wrap: wrap;
+}
+.auth-card input {
+  width: 100%;
+}
+.calendarcontrols {
+  flex-wrap: wrap;
+}
+.follower-title {
+  margin: 0 0 14px;
+}
+.sidebar .sidebrand .brandwords {
+  display: block;
+}
+.topbar .gradientbtn {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+.proinput:focus,
+.protextarea:focus,
+.proselect:focus {
+  outline: 2px solid #b867e5;
+}
+.notification {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #222846;
+  color: white;
+  border-radius: 12px;
+  padding: 14px 18px;
+  z-index: 100;
+  max-width: 90vw;
+  font-size: 13px;
+  box-shadow: 0 10px 30px #2224;
+}
+@media (max-width: 700px) {
+  .reports-grid {
+    grid-template-columns: 1fr;
+  }
+  .topbar {
+    padding: 17px 0;
+    gap: 7px;
+  }
+  .topbar h1 {
+    font-size: 22px;
+  }
+  .topbar p {
+    font-size: 11px;
+  }
+  .topbar-right .gradientbtn {
+    padding: 10px;
+    font-size: 11px;
+  }
+  .profilebubble {
+    display: none;
+  }
+  .workspace {
+    padding: 0 12px 35px;
+  }
+  .dashboardcards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .dashgrid {
+    grid-template-columns: 1fr;
+  }
+  .lowergrid {
+    grid-template-columns: 1fr;
+  }
+  .lowergrid .rightstack {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+  }
+  .sidebar .sidebrand .brandwords {
+    display: block;
+  }
+  .sidebar .sidenav .nav-label {
+    display: block;
+  }
+  .sidebar.open {
+    width: 238px;
+  }
+  .mobilemenu {
+    display: flex;
+  }
+  .profile .row-actions {
+    gap: 3px;
+  }
+  .profile .handle {
+    font-size: 12px;
+  }
+  .calendargrid .daycell {
+    min-height: 85px;
+    padding: 3px;
+  }
+  .calendargrid .event-button {
+    font-size: 9px;
+    padding: 3px;
+  }
+  .calendarcontrols .monthlabel {
+    min-width: 100px;
+  }
+  .toolbar .proinput {
+    min-width: 100%;
+  }
+  .calendar-week .daycell {
+    min-height: 120px;
+  }
+  .calendargrid {
+    width: 100%;
+  }
+  .daynum {
+    width: 21px;
+  }
+  .account-card {
+    flex-wrap: wrap;
+  }
+  .itemactions {
+    width: 100%;
+  }
+  .auth-card {
+    padding: 24px;
+  }
+  .topbar-right {
+    max-width: 130px;
+  }
+  .profile {
+    flex-wrap: wrap;
+  }
+  .profile .info {
+    min-width: 110px;
+  }
+  .history-row {
+    flex-wrap: wrap;
+  }
+}
+.topbar-right .gradientbtn::after {
+  content: none !important;
+}

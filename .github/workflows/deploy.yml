@@ -1,0 +1,36 @@
+name: Deploy independent Firebase project
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run check
+      - run: npm ci --prefix functions
+      - run: npm run build --prefix functions
+      - run: npm run test:rules
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e:emulators
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.FIREBASE_WIF_PROVIDER }}
+          service_account: ${{ vars.FIREBASE_DEPLOY_SERVICE_ACCOUNT }}
+      - run: npx firebase deploy --only firestore,storage,functions --project lup-media-pro --non-interactive
+      - name: Roll out the validated commit
+        env:
+          BACKEND_ID: ${{ vars.APP_HOSTING_BACKEND_ID }}
+        run: npx firebase apphosting:rollouts:create "$BACKEND_ID" --git-commit "$GITHUB_SHA" --project lup-media-pro --force --non-interactive

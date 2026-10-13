@@ -1,0 +1,14 @@
+runConfig:
+  minInstances: 0
+  maxInstances: 4
+  concurrency: 40
+  cpu: 1
+  memoryMiB: 1024
+env:
+  - variable: META_APP_SECRET
+    secret: META_APP_SECRET
+    availability: [RUNTIME]
+  - variable: TOKEN_ENCRYPTION_KEY
+    secret: TOKEN_ENCRYPTION_KEY
+    availability: [RUNTIME]
+# Add public Firebase config and APP_ORIGIN from the independent project's console.

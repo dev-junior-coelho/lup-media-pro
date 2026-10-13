@@ -1,0 +1,53 @@
+{
+  "name": "lup-media-pro",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:rules": "firebase emulators:exec --project demo-lup-media-pro --only firestore,storage 'vitest run --config vitest.rules.config.ts'",
+    "emulators": "firebase emulators:start --project demo-lup-media-pro --only auth,firestore,storage",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build",
+    "test:e2e:emulators": "firebase emulators:exec --project demo-lup-media-pro --only auth,firestore,storage 'LUP_E2E_EMULATORS=true playwright test'",
+    "dev:emulators": "firebase emulators:exec --project demo-lup-media-pro --only auth,firestore,storage 'node scripts/dev-emulators.mjs'"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "date-fns-tz": "^3.2.0",
+    "firebase": "12.19.0",
+    "firebase-admin": "14.5.0",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.468.0",
+    "next": "16.4.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "sharp": "^0.35.5",
+    "tailwindcss": "^4.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "16.4.0",
+    "firebase-tools": "^15.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.4"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.0"
+  },
+  "type": "module"
+}
