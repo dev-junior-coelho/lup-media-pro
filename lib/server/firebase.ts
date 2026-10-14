@@ -3,18 +3,24 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 export function admin() {
+  const configValue = process.env.FIREBASE_CONFIG;
+  const runtimeConfig: { projectId?: string; storageBucket?: string } =
+    configValue?.trim().startsWith("{") ? JSON.parse(configValue) : {};
   const projectId =
     process.env.GOOGLE_CLOUD_PROJECT ??
     process.env.GCLOUD_PROJECT ??
-    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ??
+    runtimeConfig.projectId;
   if (!projectId) throw Error("Firebase não configurado.");
   const app =
     getApps()[0] ??
     initializeApp({
       projectId,
       storageBucket:
+        process.env.LUP_STORAGE_BUCKET ??
         process.env.FIREBASE_STORAGE_BUCKET ??
-        process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+        process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ??
+        runtimeConfig.storageBucket,
       credential: applicationDefault(),
     });
   return {

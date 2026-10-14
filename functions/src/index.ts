@@ -11,6 +11,7 @@ export const publishScheduled = onSchedule(
     memory: "512MiB",
     maxInstances: 1,
     secrets: [encryption],
+    serviceAccount: "lup-publishing-worker@lup-media-pro.iam.gserviceaccount.com",
   },
   async () => {
     process.env.TOKEN_ENCRYPTION_KEY = encryption.value();
@@ -24,6 +25,7 @@ export const refreshInstagramTokens = onSchedule(
     timeZone: "UTC",
     region: "southamerica-east1",
     secrets: [encryption],
+    serviceAccount: "lup-publishing-worker@lup-media-pro.iam.gserviceaccount.com",
   },
   async () => {
     process.env.TOKEN_ENCRYPTION_KEY = encryption.value();

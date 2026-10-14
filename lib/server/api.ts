@@ -3,6 +3,7 @@ import originalUsers from "../../migration/original-users.json";
 import { z } from "zod";
 import sharp from "sharp";
 import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { admin, workspacePath } from "./firebase";
 import {
   authorize,
@@ -280,9 +281,16 @@ export async function api(req: Request, path: string[]) {
     const m = mediaInput.parse(await json(req));
     if (m.mime === "image/jpeg" && m.size > 8 * 1024 * 1024)
       throw new HttpError(400, "JPEG excede 8 MB.");
-    const path = `workspaces/${ws}/media/${m.id}`;
-    const file = bucket.file(path);
+    const pendingPath = `pending/${ws}/${m.id}`;
+    const path = `workspaces/${ws}/private/${m.id}`;
+    if ((await db.doc(`${base}/media/${m.id}`).get()).exists)
+      return Response.json({ ok: true });
+    let file = bucket.file(pendingPath);
+    if (!(await file.exists())[0])
+      file = bucket.file(`workspaces/${ws}/media/${m.id}`);
     const [meta] = await file.getMetadata();
+    if (meta.contentEncoding && meta.contentEncoding !== "identity")
+      throw new HttpError(400, "Codificação de upload não suportada.");
     if (Number(meta.size) !== m.size || meta.contentType !== m.mime)
       throw new HttpError(400, "Upload não corresponde aos metadados.");
     const [bytes] = await file.download({ start: 0, end: 31 });
@@ -298,12 +306,30 @@ export async function api(req: Request, path: string[]) {
       m.width = metadata.width;
       m.height = metadata.height;
     }
-    await file.setMetadata({
-      metadata: { firebaseStorageDownloadTokens: null },
-    });
+    const privateFile = bucket.file(path);
+    if (!(await privateFile.exists())[0])
+      await pipeline(
+        file.createReadStream(),
+        privateFile.createWriteStream({
+          resumable: false,
+          metadata: { contentType: m.mime },
+          preconditionOpts: { ifGenerationMatch: 0 },
+        }),
+      );
+    const [privateMetadata] = await privateFile.getMetadata();
+    if (
+      privateMetadata.metadata?.firebaseStorageDownloadTokens ||
+      Number(privateMetadata.size) !== m.size ||
+      privateMetadata.contentType !== m.mime
+    )
+      throw new HttpError(
+        500,
+        "Não foi possível proteger a mídia. Tente novamente.",
+      );
     await db
       .doc(`${base}/media/${m.id}`)
-      .set({ ...m, path, createdAt: new Date().toISOString() });
+      .set({ ...m, path, private: true, createdAt: new Date().toISOString() });
+    await file.delete({ ignoreNotFound: true });
     await audit("media_uploaded", m.id);
     return Response.json({ ok: true });
   }

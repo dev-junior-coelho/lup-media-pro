@@ -10,7 +10,9 @@
     {
       "source": "functions",
       "codebase": "lup-media-pro",
-      "predeploy": ["npm --prefix functions run build"]
+      "predeploy": [
+        "npm --prefix functions run build"
+      ]
     }
   ],
   "emulators": {
@@ -32,5 +34,20 @@
     "providers": {
       "emailPassword": true
     }
+  },
+  "apphosting": {
+    "backendId": "lup-media-pro",
+    "rootDir": ".",
+    "ignore": [
+      "node_modules",
+      ".git",
+      ".next",
+      "test-results",
+      "playwright-report",
+      "**/.env*",
+      "**/*-debug.log",
+      "functions/lib",
+      "gha-creds-*.json"
+    ]
   }
 }

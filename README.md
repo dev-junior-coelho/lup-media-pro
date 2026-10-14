@@ -2,6 +2,10 @@
 
 Aplicação Next.js + Firebase para organizar conteúdo e seguidores, com integração Instagram Login e scheduler Gen 2. Projeto Firebase exclusivo: `lup-media-pro`.
 
+Aplicação publicada: https://lup-media-pro--lup-media-pro.us-central1.hosted.app
+
+OAuth configurado; a conexão real da conta e a publicação de teste dependem da autorização do proprietário.
+
 ```sh
 npm ci
 npm ci --prefix functions

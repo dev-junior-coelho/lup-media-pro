@@ -230,7 +230,7 @@ export function App() {
         throw Error("Arquivo excede o limite de tamanho.");
       const meta = await probe(file);
       const id = crypto.randomUUID(),
-        path = `workspaces/${ws}/media/${id}`;
+        path = `pending/${ws}/${id}`;
       await new Promise<void>((resolve, reject) => {
         uploadBytesResumable(ref(firebaseClient()!.storage, path), file, {
           contentType: file.type,

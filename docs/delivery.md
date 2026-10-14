@@ -21,9 +21,13 @@ Repositório privado: https://github.com/dev-junior-coelho/lup-media-pro
 
 ## Infraestrutura real
 
-Projeto Firebase independente lup-media-pro e app Web criados. Firestore nam5 criado, regras/índices publicados e Authentication e-mail/senha habilitado. App Hosting, Storage e Functions ainda não estão implantados/ativos. App Hosting rejeitou habilitação por falta de plano Blaze.
+Projeto Firebase independente lup-media-pro: Authentication e Firestore nam5 habilitados; Storage privado criado; App Hosting publicado; duas Functions Gen 2 e jobs habilitados. A execução vazia do scheduler na nuvem foi confirmada por logs 200/scanned=0/errors=0.
 
-**Não existe endereço público da aplicação ou callback OAuth verificado.** A rota de callback está implementada; a URL completa depende do deploy do backend.
+Aplicação: https://lup-media-pro--lup-media-pro.us-central1.hosted.app
+
+Callback: https://lup-media-pro--lup-media-pro.us-central1.hosted.app/api/auth/instagram/callback
+
+App ID 1053568541018948 e segredo versão 1 configurados. Nenhuma conta Instagram foi conectada por este agente e nenhum conteúdo real foi enviado. O usuário deve completar o OAuth no aplicativo publicado.
 
 ## Validação
 
@@ -33,7 +37,7 @@ Auditoria npm das dependências de produção: zero vulnerabilidades tanto na ap
 
 ## Pendências externas
 
-Habilitar Blaze no projeto independente; configurar LEGACY_MIGRATION_OWNER_UID para restringir a lista original ao seu proprietário; fornecer App ID e inserir App Secret no Secret Manager; criar chave AES e permissões IAM; provisionar bucket e App Hosting; obter origem HTTPS real. Teste real de publicação somente com autorização explícita do proprietário.
+Cadastrar a URL OAuth exata no painel Meta e conectar a conta profissional. LEGACY_MIGRATION_OWNER_UID ainda precisa do UID do proprietário para liberar a lista pessoal original, evitando sua exposição a outros usuários. A imagem de teste e a legenda estão preparadas em docs/instagram-test/; a publicação exige confirmação explícita.
 
 ## Limitações
 

@@ -3,10 +3,16 @@ service firebase.storage {
  match /b/{bucket}/o {
   function member(ws) {return request.auth != null && firestore.exists(/databases/(default)/documents/workspaces/$(ws)/members/$(request.auth.uid));}
   function editor(ws) {return member(ws) && firestore.get(/databases/(default)/documents/workspaces/$(ws)/members/$(request.auth.uid)).data.role in ['owner','admin','editor'];}
+  function validUpload(ws,id) {return editor(ws) && id.matches('[a-f0-9-]{36}') && request.resource.size > 0 && ((request.resource.contentType == 'image/jpeg' && request.resource.size <= 8 * 1024 * 1024) || (request.resource.contentType in ['video/mp4','video/quicktime'] && request.resource.size <= 300 * 1024 * 1024));}
+  match /pending/{ws}/{id} {
+   // Server validates and promotes uploads to workspaces/{ws}/private.
+   allow create: if validUpload(ws,id);
+   allow read,update,delete: if false;
+  }
+  // Keep old open tabs working during deployment; finalization promotes these too.
   match /workspaces/{ws}/media/{id} {
-   allow read: if member(ws);
-   allow create: if editor(ws) && id.matches('[a-f0-9-]{36}') && request.resource.size > 0 && ((request.resource.contentType == 'image/jpeg' && request.resource.size <= 8 * 1024 * 1024) || (request.resource.contentType in ['video/mp4','video/quicktime'] && request.resource.size <= 300 * 1024 * 1024)) && !('firebaseStorageDownloadTokens' in request.resource.metadata);
-   allow update,delete: if false;
+   allow create: if validUpload(ws,id);
+   allow read,update,delete: if false;
   }
   match /{allPaths=**} {allow read,write: if false;}
  }

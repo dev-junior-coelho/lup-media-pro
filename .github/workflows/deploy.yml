@@ -30,7 +30,5 @@ jobs:
           workload_identity_provider: ${{ vars.FIREBASE_WIF_PROVIDER }}
           service_account: ${{ vars.FIREBASE_DEPLOY_SERVICE_ACCOUNT }}
       - run: npx firebase deploy --only firestore,storage,functions --project lup-media-pro --non-interactive
-      - name: Roll out the validated commit
-        env:
-          BACKEND_ID: ${{ vars.APP_HOSTING_BACKEND_ID }}
-        run: npx firebase apphosting:rollouts:create "$BACKEND_ID" --git-commit "$GITHUB_SHA" --project lup-media-pro --force --non-interactive
+      - name: Deploy the validated source to App Hosting
+        run: npx firebase deploy --only apphosting --project lup-media-pro --non-interactive

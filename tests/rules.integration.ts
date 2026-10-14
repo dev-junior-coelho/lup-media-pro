@@ -82,14 +82,14 @@ it("não permite cliente alterar status ou permissões", async () => {
   );
 });
 it("protege upload, download e formatos", async () => {
-  const path = "workspaces/a/media/11111111-1111-4111-8111-111111111111";
+  const path = "pending/a/11111111-1111-4111-8111-111111111111";
   const bytes = new Uint8Array([255, 216, 255]);
   await assertSucceeds(
     uploadBytes(ref(env.authenticatedContext("alice").storage(), path), bytes, {
       contentType: "image/jpeg",
     }),
   );
-  await assertSucceeds(
+  await assertFails(
     getBytes(ref(env.authenticatedContext("alice").storage(), path)),
   );
   await assertFails(
@@ -99,7 +99,7 @@ it("protege upload, download e formatos", async () => {
     uploadBytes(
       ref(
         env.authenticatedContext("viewer").storage(),
-        "workspaces/a/media/22222222-2222-4222-8222-222222222222",
+        "pending/a/22222222-2222-4222-8222-222222222222",
       ),
       bytes,
       { contentType: "image/jpeg" },
@@ -109,7 +109,7 @@ it("protege upload, download e formatos", async () => {
     uploadBytes(
       ref(
         env.authenticatedContext("alice").storage(),
-        "workspaces/a/media/33333333-3333-4333-8333-333333333333",
+        "pending/a/33333333-3333-4333-8333-333333333333",
       ),
       bytes,
       { contentType: "text/html" },
