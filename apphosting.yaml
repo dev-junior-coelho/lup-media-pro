@@ -42,5 +42,5 @@ env:
     value: "1115866234134688"
     availability: [RUNTIME]
   - variable: META_APP_SECRET
-    secret: META_APP_SECRET@1
+    secret: META_APP_SECRET@2
     availability: [RUNTIME]
