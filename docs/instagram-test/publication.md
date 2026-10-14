@@ -1,6 +1,6 @@
 # Publicação de teste preparada — não enviada
 
-Conta pretendida: @junior_coelho36 (conectar pelo OAuth antes de executar).
+Conta: @junior_coelho36 — OAuth real concluído, BUSINESS e permissão de publicação confirmados. Publicação ainda não autorizada.
 
 Mídia: integration-test.jpg, JPEG 1080 × 1080, proporção 1:1.
 

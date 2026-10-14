@@ -27,7 +27,7 @@ Aplicação: https://lup-media-pro--lup-media-pro.us-central1.hosted.app
 
 Callback: https://lup-media-pro--lup-media-pro.us-central1.hosted.app/api/auth/instagram/callback
 
-Instagram App ID 1115866234134688 configurado após o Instagram recusar o ID do aplicativo Meta principal 1053568541018948. Instagram App Secret versão 2 vinculado após confirmação do proprietário de que a nova versão veio da seção Instagram do painel. Nenhuma conta Instagram foi conectada por este agente e nenhum conteúdo real foi enviado. O usuário deve completar o OAuth no aplicativo publicado.
+Instagram App ID 1115866234134688 configurado após o Instagram recusar o ID do aplicativo Meta principal 1053568541018948. Instagram App Secret versão 2 vinculado após confirmação do proprietário de que a nova versão veio da seção Instagram do painel. O proprietário completou o OAuth no aplicativo publicado: @junior_coelho36 conectado como BUSINESS, com instagram_business_basic e instagram_business_content_publish confirmados no registro persistido. Token válido até 12/12/2026; renovação diária habilitada. Nenhum conteúdo real foi enviado.
 
 ## Validação
 
@@ -39,8 +39,12 @@ Auditoria npm das dependências de produção: zero vulnerabilidades tanto na ap
 
 ## Pendências externas
 
-Cadastrar a URL OAuth exata no painel Meta e conectar a conta profissional. LEGACY_MIGRATION_OWNER_UID ainda precisa do UID do proprietário para liberar a lista pessoal original, evitando sua exposição a outros usuários. A imagem de teste e a legenda estão preparadas em docs/instagram-test/; a publicação exige confirmação explícita.
+OAuth real concluído. A publicação real de teste ainda aguarda confirmação explícita do proprietário. LEGACY_MIGRATION_OWNER_UID ainda precisa do UID do proprietário para liberar a lista pessoal original, evitando sua exposição a outros usuários. A imagem de teste e a legenda estão preparadas em docs/instagram-test/; a publicação exige confirmação explícita.
 
 ## Limitações
 
 Validação/transcodificação completa de vídeos no servidor, quotas e coleta de uploads órfãos, paginação além de 1.000 registros, UI de convites/equipes, insights autorizados, políticas públicas de comercialização e App Review ainda exigem trabalho. O scheduler usa resolução de um minuto e lote de até 50 posts. A lista inicial é baseada em exportação parcial e não identifica automaticamente unfollows recentes.
+
+## Correções e validação do OAuth real
+
+Normalização das respostas de troca direta/data, preservação das permissões devolvidas pela Meta, consultas de permissões e revogação pela identidade autenticada, consulta separada do tipo de conta e validação de token/validade. 36 testes unitários, TypeScript, ESLint, build Next.js e build de Functions aprovados após as correções. Conta conectada confirmada por leitura dos campos públicos de accounts no Firestore; nenhum segredo foi lido nessa verificação.
