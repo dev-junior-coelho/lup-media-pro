@@ -46,8 +46,8 @@ vi.mock("../lib/server/meta", () => ({
   exchangeCode: fake.exchange,
   MetaClient: class {
     me = async () => ({
-      id: "ig",
-      user_id: "ig",
+      id: "123",
+      user_id: "123",
       username: "test",
       account_type: "BUSINESS",
     });
@@ -56,6 +56,7 @@ vi.mock("../lib/server/meta", () => ({
 }));
 import { startOAuth, callback, scopes } from "../lib/server/oauth";
 beforeEach(() => {
+  vi.clearAllMocks();
   fake.docs.clear();
   process.env.APP_ORIGIN = "https://app.example";
   process.env.META_APP_ID = "app-id";
@@ -69,6 +70,28 @@ beforeEach(() => {
     data: scopes.map((permission) => ({ permission, status: "granted" })),
   });
   fake.docs.set("workspaces/ws/members/u", { role: "owner" });
+});
+
+it("usa permissões recebidas na troca sem consultar o ID do perfil", async () => {
+  fake.exchange.mockResolvedValue({ access_token: "fixture", expires_in: 5184000, permissions: scopes });
+  const a = await begin();
+  const r = await callback(new Request(
+    `https://app.example/api/auth/instagram/callback?state=${a.state}&code=test`,
+    { headers: { cookie: a.cookie } },
+  ));
+  expect(r.status).toBe(303);
+  expect(fake.permissions).not.toHaveBeenCalled();
+});
+
+it("não substitui permissões insuficientes da troca pelas permissões solicitadas", async () => {
+  fake.exchange.mockResolvedValue({ access_token: "fixture", expires_in: 5184000, permissions: [] });
+  const a = await begin();
+  await expect(callback(new Request(
+    `https://app.example/api/auth/instagram/callback?state=${a.state}&code=test`,
+    { headers: { cookie: a.cookie } },
+  ))).rejects.toThrow("concedidas");
+  expect(fake.permissions).not.toHaveBeenCalled();
+  expect(fake.docs.has("workspaces/ws/accounts/123")).toBe(false);
 });
 async function begin() {
   const r = await startOAuth(
@@ -89,10 +112,10 @@ it("conecta e reconecta conta com token somente no servidor", async () => {
       ),
     );
     expect(r.status).toBe(303);
-    expect(fake.docs.get("workspaces/ws/accounts/ig")).not.toHaveProperty(
+    expect(fake.docs.get("workspaces/ws/accounts/123")).not.toHaveProperty(
       "token",
     );
-    expect(fake.docs.get("workspaces/ws/secrets/ig")?.token).not.toBe(
+    expect(fake.docs.get("workspaces/ws/secrets/123")?.token).not.toBe(
       "not-public",
     );
   }
@@ -134,7 +157,7 @@ it("rejeita autorização sem permissão de publicação", async () => {
       ),
     ),
   ).rejects.toThrow("concedidas");
-  expect(fake.docs.has("workspaces/ws/accounts/ig")).toBe(false);
+  expect(fake.docs.has("workspaces/ws/accounts/123")).toBe(false);
 });
 it("autoriza apenas os scopes mínimos e callback HTTPS", async () => {
   const a = await begin(),

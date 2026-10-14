@@ -81,8 +81,9 @@ export async function callback(req: Request) {
   const client = new MetaClient(token.access_token),
     me = await client.me(),
     id = me.user_id ?? me.id;
-  const granted = await client.permissions(id);
-  const permissions = granted.data
+  if (typeof id !== "string" || !/^\d+$/.test(id) || typeof me.username !== "string")
+    throw new HttpError(502, "Instagram não retornou um perfil válido.");
+  const permissions: string[] = token.permissions ?? (await client.permissions()).data
     .filter((x) => x.status === "granted")
     .map((x) => x.permission);
   if (scopes.some((s) => !permissions.includes(s)))

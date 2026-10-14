@@ -94,7 +94,7 @@ export async function api(req: Request, path: string[]) {
     const secret = await db.doc(`${base}/secrets/${id}`).get();
     if (secret.exists) {
       try {
-        await new MetaClient(decrypt(secret.data()!.token)).revoke(id);
+        await new MetaClient(decrypt(secret.data()!.token)).revoke();
       } catch (e) {
         if (!(e instanceof MetaError && e.code === 190)) throw e;
       }

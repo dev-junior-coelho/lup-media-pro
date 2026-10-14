@@ -42,6 +42,7 @@ export class MetaClient {
         0,
         true,
         method === "POST" && path.endsWith("/media_publish"),
+        path === "me" ? "profile" : path.endsWith("/permissions") ? "permissions" : "graph",
       );
     }
     const data = await r.json();
@@ -52,20 +53,31 @@ export class MetaClient {
           [4, 17, 32, 613].includes(data.error?.code) ||
           r.status >= 500,
         method === "POST" && path.endsWith("/media_publish") && r.status >= 500,
+        path === "me" ? "profile" : path.endsWith("/permissions") ? "permissions" : "graph",
       );
     return data;
   }
-  me() {
-    return this.call<{
+  async me() {
+    const profile = await this.call<{
       id: string;
       user_id?: string;
       username: string;
-      account_type: string;
-    }>("me", { fields: "user_id,username,account_type" });
+    }>("me", { fields: "id,user_id,username" });
+    let accountType = "UNKNOWN";
+    try {
+      const detail = await this.call<{ account_type?: string }>("me", { fields: "account_type" });
+      if (typeof detail.account_type === "string")
+        accountType = detail.account_type.toUpperCase();
+    } catch (e) {
+      // Some API versions do not expose this optional field. Keep Stories
+      // disabled unless the API explicitly confirms a Business account.
+      if (!(e instanceof MetaError) || e.code !== 100) throw e;
+    }
+    return { ...profile, account_type: accountType };
   }
-  permissions(id: string) {
+  permissions() {
     return this.call<{ data: { permission: string; status: string }[] }>(
-      `${id}/permissions`,
+      "me/permissions",
     );
   }
   create(id: string, p: Record<string, string>) {
@@ -88,8 +100,8 @@ export class MetaClient {
       fields: "id,permalink",
     });
   }
-  revoke(id: string) {
-    return this.call(`${id}/permissions`, {}, "DELETE");
+  revoke() {
+    return this.call("me/permissions", {}, "DELETE");
   }
   limit(id: string) {
     return this.call<{
@@ -139,7 +151,12 @@ export async function exchangeCode(code: string, redirect: string) {
   if (typeof long.access_token !== "string" || !long.access_token ||
       !Number.isFinite(long.expires_in) || long.expires_in <= 0)
     throw new MetaError(0, false, false, "long_token_response");
-  return long;
+  const permissions = typeof credential.permissions === "string"
+    ? credential.permissions.split(",").map((p: string) => p.trim()).filter(Boolean)
+    : Array.isArray(credential.permissions) && credential.permissions.every((p: unknown) => typeof p === "string")
+      ? credential.permissions
+      : undefined;
+  return { ...long, permissions };
 }
 export async function refreshToken(token: string) {
   return tokenRequest("https://graph.instagram.com/refresh_access_token", {
