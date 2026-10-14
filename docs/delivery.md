@@ -15,7 +15,7 @@ Implementação executável em Next.js e Firebase; não é declarada como SaaS f
 - Fluxos de contêiner para imagem, carrossel, Reel e Story Business, sujeitos a validação real da Meta.
 - Functions Gen 2: scheduler a cada minuto, renovação diária de tokens, leases, revisões, retentativas e reconciliação conservadora. Nenhum envio real executado.
 - CSV com dados internos reais; métricas sem autorização mostram Dado indisponível. IA e anúncios explicitamente não habilitados.
-- CI e workflow manual de deploy com Workload Identity Federation, dependentes da configuração externa.
+- CI e workflow manual de deploy com Workload Identity Federation configurados e executados com sucesso, sem chave de serviço no GitHub.
 
 Repositório privado: https://github.com/dev-junior-coelho/lup-media-pro
 
@@ -32,6 +32,8 @@ App ID 1053568541018948 e segredo versão 1 configurados. Nenhuma conta Instagra
 ## Validação
 
 Resultados: **25 testes unitários**, **3 testes de regras Firestore/Storage** e **4 testes Playwright (desktop/mobile)** aprovados. TypeScript e ESLint aprovados, build de Functions aprovado. Build de produção Next.js aprovado. Total: **32 testes aprovados**. Os testes E2E usam Auth, Firestore e Storage reais em emuladores, incluindo cadastro/login/recuperação, autorização entre usuários na API, criação/edição de rascunho, JPEG, agenda/reagenda/cancelamento, ZIP, migração, marcações preservadas e backup/restauração. Testes de Meta são simulados; sucesso dos testes não significa conexão real com @junior_coelho36.
+
+Deploy completo pelo GitHub aprovado: https://github.com/dev-junior-coelho/lup-media-pro/actions/runs/38490545109. Verificação HTTPS em produção aprovada com conta temporária: cadastro, sessão persistente, bootstrap, rascunho persistido, upload e prévia privados, bloqueio da migração pessoal e início OAuth com App ID/callback corretos. A conta e seus registros foram removidos; nenhum login ou envio ao Instagram foi realizado. Script reproduzível: scripts/smoke-production.mjs. Captura: docs/images/production-dashboard.png.
 
 Auditoria npm das dependências de produção: zero vulnerabilidades tanto na aplicação quanto em Functions. A cadeia de ferramentas de desenvolvimento ainda contém advisories transitivos (Firebase CLI/ESLint); não é correto afirmar que a auditoria de todas as dependências está limpa.
 
