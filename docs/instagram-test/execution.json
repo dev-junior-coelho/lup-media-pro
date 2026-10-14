@@ -1,0 +1,15 @@
+{
+  "postId": "88fbcedc-f301-45e5-974d-a6b3bdc0f559",
+  "mediaId": "494aee5b-a52f-4246-9d7f-09d8e6cadc53",
+  "account": "@junior_coelho36",
+  "accountId": "17841400641656291",
+  "workspaceId": "tfE1dgrRCuZxyFa3ZCgSAdUt2YU2",
+  "scheduledAt": "2026-10-14T01:57:11.231Z",
+  "caption": "Este é um teste de integração do LUP Media Pro com a API oficial do Instagram. Validando o fluxo de publicação e agendamento de conteúdo. #LUPMediaPro #TesteDeIntegração",
+  "approved": true,
+  "status": "published",
+  "sha256": "bca7eb1e5d3f6e4082205563c1fb9e40a86ef3bdfb0d9c2169e71730dc067bd6",
+  "instagramId": "18124975150917084",
+  "permalink": "https://www.instagram.com/p/DedQb0wjJco/",
+  "publishedAt": "2026-10-14T01:59:02.392Z"
+}

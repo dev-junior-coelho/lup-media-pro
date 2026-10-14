@@ -1,6 +1,6 @@
-# Publicação de teste preparada — não enviada
+# Publicação de teste concluída
 
-Conta: @junior_coelho36 — OAuth real concluído, BUSINESS e permissão de publicação confirmados. Publicação ainda não autorizada.
+Conta: @junior_coelho36 — OAuth real concluído, BUSINESS e permissão de publicação confirmados. Uma publicação explicitamente autorizada pelo proprietário e concluída pelo scheduler.
 
 Mídia: integration-test.jpg, JPEG 1080 × 1080, proporção 1:1.
 
@@ -10,4 +10,6 @@ Legenda proposta:
 >
 > #LUPMediaPro #TesteDeIntegração
 
-Nenhum job de publicação real foi criado. A publicação desta arte exige confirmação explícita do proprietário depois da conexão da conta.
+Resultado: https://www.instagram.com/p/DedQb0wjJco/
+
+Post interno: 88fbcedc-f301-45e5-974d-a6b3bdc0f559. Instagram Media ID: 18124975150917084. Agendado em 13/10/2026 às 22:57:11 e confirmado em 13/10/2026 às 22:59:02 (America/Bahia). Estado published/complete, zero retentativas. Cloud Scheduler executou duas fases e registrou scanned=1/errors=0; ciclo seguinte scanned=0/errors=0. Evidência estruturada em execution.json. Nenhum segundo post foi criado.

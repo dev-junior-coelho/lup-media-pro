@@ -44,3 +44,6 @@ env:
   - variable: META_APP_SECRET
     secret: META_APP_SECRET@2
     availability: [RUNTIME]
+  - variable: LEGACY_MIGRATION_OWNER_UID
+    value: "tfE1dgrRCuZxyFa3ZCgSAdUt2YU2"
+    availability: [RUNTIME]

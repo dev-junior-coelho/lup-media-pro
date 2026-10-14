@@ -10,7 +10,7 @@ Aplicação: **https://lup-media-pro--lup-media-pro.us-central1.hosted.app** (HT
 
 Callback exato: **https://lup-media-pro--lup-media-pro.us-central1.hosted.app/api/auth/instagram/callback** (rota alcançável; rejeita state inválido com HTTP 400).
 
-Aplicativo Meta principal: **1053568541018948**. Instagram App ID informado pelo proprietário: **1115866234134688**, usado no OAuth e na troca do código. META_APP_SECRET versão 2 contém o Instagram App Secret correspondente, conforme confirmação do proprietário, e está vinculado no App Hosting. TOKEN_ENCRYPTION_KEY permanece na versão 1. O segredo foi inserido diretamente pelo proprietário no Secret Manager, sem passar pelo chat ou Git. Isso confirma configuração, não conexão real de uma conta Instagram.
+Aplicativo Meta principal: **1053568541018948**. Instagram App ID informado pelo proprietário: **1115866234134688**, usado no OAuth e na troca do código. META_APP_SECRET versão 2 contém o Instagram App Secret correspondente, conforme confirmação do proprietário, e está vinculado no App Hosting. TOKEN_ENCRYPTION_KEY permanece na versão 1. O segredo foi inserido diretamente pelo proprietário no Secret Manager, sem passar pelo chat ou Git. OAuth real de @junior_coelho36 e uma publicação de teste explicitamente autorizada foram confirmados; ver docs/instagram-test/publication.md.
 
 ## Desenvolvimento
 
@@ -24,7 +24,7 @@ Emuladores: `npm run emulators` (projeto demo-lup-media-pro, Java 21). Para o fr
 2. Entrar/criar sua conta na aplicação e abrir Configurações → Conectar / reconectar Instagram. Autorizar somente os scopes mínimos.
 3. Confirmar que @junior_coelho36 aparece conectada. A validação real do token, da identificação e das permissões depende dessa autorização externa.
 4. A arte/legenda de teste estão em docs/instagram-test/. Não foi criado job real; enviar somente depois de confirmação explícita do proprietário.
-5. Para habilitar a lista pessoal embutida, definir LEGACY_MIGRATION_OWNER_UID com o UID Firebase do proprietário, mostrado nas configurações do workspace. Backups e ZIP próprios já podem ser importados sem liberar a lista pessoal para outros usuários.
+5. LEGACY_MIGRATION_OWNER_UID já configurado com o UID do proprietário do workspace conectado. A ação em Backup e migração importa a lista original somente para esse usuário. Backups e ZIP próprios podem ser importados pelos demais usuários sem acesso à lista pessoal original.
 
 Functions usa LUP_STORAGE_BUCKET porque FIREBASE_ é prefixo reservado para variáveis próprias de Functions; também há fallback seguro ao FIREBASE_CONFIG nativo do runtime. Contas de execução próprias e IAM restrito ao projeto/bucket/segredos. URLs para a Meta são assinadas por serviço com signBlob e validade de duas horas. Não rotacionar a chave AES sem recriptografar credenciais existentes.
 

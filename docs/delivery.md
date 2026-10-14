@@ -13,7 +13,7 @@ Implementação executável em Next.js e Firebase; não é declarada como SaaS f
 - Migração explícita da lista original de 1.976 perfis e formatos de backup anteriores. Agendamentos legados restaurados como rascunhos.
 - Instagram Login: início OAuth, state/cookie/uso único, callback, troca de token, consulta de permissões, criptografia, reconexão e desconexão.
 - Fluxos de contêiner para imagem, carrossel, Reel e Story Business, sujeitos a validação real da Meta.
-- Functions Gen 2: scheduler a cada minuto, renovação diária de tokens, leases, revisões, retentativas e reconciliação conservadora. Nenhum envio real executado.
+- Functions Gen 2: scheduler a cada minuto, renovação diária de tokens, leases, revisões, retentativas e reconciliação conservadora. Uma publicação real de teste, explicitamente autorizada, concluída pelo scheduler; ver docs/instagram-test/publication.md.
 - CSV com dados internos reais; métricas sem autorização mostram Dado indisponível. IA e anúncios explicitamente não habilitados.
 - CI e workflow manual de deploy com Workload Identity Federation configurados e executados com sucesso, sem chave de serviço no GitHub.
 
@@ -27,7 +27,7 @@ Aplicação: https://lup-media-pro--lup-media-pro.us-central1.hosted.app
 
 Callback: https://lup-media-pro--lup-media-pro.us-central1.hosted.app/api/auth/instagram/callback
 
-Instagram App ID 1115866234134688 configurado após o Instagram recusar o ID do aplicativo Meta principal 1053568541018948. Instagram App Secret versão 2 vinculado após confirmação do proprietário de que a nova versão veio da seção Instagram do painel. O proprietário completou o OAuth no aplicativo publicado: @junior_coelho36 conectado como BUSINESS, com instagram_business_basic e instagram_business_content_publish confirmados no registro persistido. Token válido até 12/12/2026; renovação diária habilitada. Nenhum conteúdo real foi enviado.
+Instagram App ID 1115866234134688 configurado após o Instagram recusar o ID do aplicativo Meta principal 1053568541018948. Instagram App Secret versão 2 vinculado após confirmação do proprietário de que a nova versão veio da seção Instagram do painel. O proprietário completou o OAuth no aplicativo publicado: @junior_coelho36 conectado como BUSINESS, com instagram_business_basic e instagram_business_content_publish confirmados no registro persistido. Token válido até 12/12/2026; renovação diária habilitada. Uma publicação real de teste foi autorizada e confirmada pela Meta: https://www.instagram.com/p/DedQb0wjJco/.
 
 ## Validação
 
@@ -39,7 +39,7 @@ Auditoria npm das dependências de produção: zero vulnerabilidades tanto na ap
 
 ## Pendências externas
 
-OAuth real concluído. A publicação real de teste ainda aguarda confirmação explícita do proprietário. LEGACY_MIGRATION_OWNER_UID ainda precisa do UID do proprietário para liberar a lista pessoal original, evitando sua exposição a outros usuários. A imagem de teste e a legenda estão preparadas em docs/instagram-test/; a publicação exige confirmação explícita.
+OAuth real e publicação de teste concluídos. LEGACY_MIGRATION_OWNER_UID configurado para o proprietário do workspace conectado; a importação da lista original permanece uma ação explícita no menu Backup e migração. Progresso do HTML local depende do backup exportado pelo proprietário. App Review e políticas comerciais continuam pendentes para atender terceiros.
 
 ## Limitações
 
