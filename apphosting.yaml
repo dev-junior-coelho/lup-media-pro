@@ -39,7 +39,7 @@ env:
     secret: TOKEN_ENCRYPTION_KEY
     availability: [RUNTIME]
   - variable: META_APP_ID
-    value: "1053568541018948"
+    value: "1115866234134688"
     availability: [RUNTIME]
   - variable: META_APP_SECRET
     secret: META_APP_SECRET@1

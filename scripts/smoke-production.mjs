@@ -205,7 +205,7 @@ try {
     throw Error(`OAuth start returned ${oauth.status()}`);
   const authUrl = new URL((await oauth.json()).url);
   if (
-    authUrl.searchParams.get("client_id") !== "1053568541018948" ||
+    authUrl.searchParams.get("client_id") !== "1115866234134688" ||
     authUrl.searchParams.get("redirect_uri") !==
       `${origin}/api/auth/instagram/callback`
   )

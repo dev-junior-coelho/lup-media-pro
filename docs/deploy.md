@@ -10,7 +10,7 @@ Aplicação: **https://lup-media-pro--lup-media-pro.us-central1.hosted.app** (HT
 
 Callback exato: **https://lup-media-pro--lup-media-pro.us-central1.hosted.app/api/auth/instagram/callback** (rota alcançável; rejeita state inválido com HTTP 400).
 
-Meta App ID informado pelo proprietário: **1053568541018948**. META_APP_SECRET versão 1 e TOKEN_ENCRYPTION_KEY criados/vinculados no Secret Manager; o segredo da Meta foi inserido diretamente pelo proprietário, sem passar pelo chat ou Git. Isso confirma configuração, não conexão real de uma conta Instagram.
+Aplicativo Meta principal: **1053568541018948**. Instagram App ID informado pelo proprietário: **1115866234134688**, usado no OAuth e na troca do código. META_APP_SECRET versão 1 e TOKEN_ENCRYPTION_KEY criados/vinculados no Secret Manager; o segredo foi inserido diretamente pelo proprietário, sem passar pelo chat ou Git. É necessário que META_APP_SECRET seja o Instagram App Secret correspondente ao Instagram App ID. Isso confirma configuração, não conexão real de uma conta Instagram.
 
 ## Desenvolvimento
 

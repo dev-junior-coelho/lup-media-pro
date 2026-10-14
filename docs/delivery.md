@@ -27,7 +27,7 @@ Aplicação: https://lup-media-pro--lup-media-pro.us-central1.hosted.app
 
 Callback: https://lup-media-pro--lup-media-pro.us-central1.hosted.app/api/auth/instagram/callback
 
-App ID 1053568541018948 e segredo versão 1 configurados. Nenhuma conta Instagram foi conectada por este agente e nenhum conteúdo real foi enviado. O usuário deve completar o OAuth no aplicativo publicado.
+Instagram App ID 1115866234134688 configurado após o Instagram recusar o ID do aplicativo Meta principal 1053568541018948. Segredo versão 1 vinculado; sua origem deve ser a seção Instagram do painel. Nenhuma conta Instagram foi conectada por este agente e nenhum conteúdo real foi enviado. O usuário deve completar o OAuth no aplicativo publicado.
 
 ## Validação
 
