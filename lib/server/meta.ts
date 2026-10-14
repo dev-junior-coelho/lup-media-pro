@@ -3,6 +3,7 @@ export class MetaError extends Error {
     public code: number,
     public transient: boolean,
     public uncertain: boolean = false,
+    public operation?: string,
   ) {
     super(`Meta recusou a operação (código ${code}).`);
   }
@@ -111,7 +112,8 @@ async function tokenRequest(
   });
   const d = await r.json();
   if (!r.ok || d.error || d.error_message)
-    throw new MetaError(d.error?.code ?? r.status, false);
+    throw new MetaError(d.error?.code ?? r.status, false, false,
+      method === "POST" ? "short_token" : "long_token");
   return d;
 }
 export async function exchangeCode(code: string, redirect: string) {
@@ -126,11 +128,18 @@ export async function exchangeCode(code: string, redirect: string) {
     },
     "POST",
   );
-  return tokenRequest("https://graph.instagram.com/access_token", {
+  const credential = Array.isArray(short.data) ? short.data[0] : short;
+  if (typeof credential?.access_token !== "string" || !credential.access_token)
+    throw new MetaError(0, false, false, "short_token_response");
+  const long = await tokenRequest("https://graph.instagram.com/access_token", {
     grant_type: "ig_exchange_token",
     client_secret: process.env.META_APP_SECRET ?? "",
-    access_token: short.access_token,
+    access_token: credential.access_token,
   });
+  if (typeof long.access_token !== "string" || !long.access_token ||
+      !Number.isFinite(long.expires_in) || long.expires_in <= 0)
+    throw new MetaError(0, false, false, "long_token_response");
+  return long;
 }
 export async function refreshToken(token: string) {
   return tokenRequest("https://graph.instagram.com/refresh_access_token", {
