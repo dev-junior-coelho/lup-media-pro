@@ -19,6 +19,8 @@ export function firebaseClient() {
     });
   const auth = initializeAuth(app, { persistence: browserLocalPersistence }),
     storage = getStorage(app);
+  auth.languageCode = "pt-BR";
+  storage.maxUploadRetryTime = 60000;
   if (
     process.env.NEXT_PUBLIC_USE_EMULATORS === "true" &&
     !(globalThis as { lupEmulators?: boolean }).lupEmulators

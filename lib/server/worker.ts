@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Post, Media, Account } from "../shared/schema";
 import { validatePublication } from "../shared/schema";
+import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
+import { readPlanContext } from "./plans";
+import { activeAccountIds, subscriptionOf } from "../shared/plans";
 import { admin } from "./firebase";
 import { decrypt } from "./security";
 import { MetaClient, MetaError, refreshToken } from "./meta";
@@ -8,9 +11,7 @@ export interface PublishingClient {
   create(id: string, p: Record<string, string>): Promise<{ id: string }>;
   status(id: string): Promise<{ status_code: string }>;
   publish(id: string, c: string): Promise<{ id: string }>;
-  limit(
-    id: string,
-  ): Promise<{
+  limit(id: string): Promise<{
     data: { quota_usage: number; config: { quota_total: number } }[];
   }>;
   media(id: string): Promise<{ id: string; permalink?: string }>;
@@ -182,10 +183,6 @@ export async function processJob(
     if (meta?.code === 190) {
       await store.invalidateAccount?.(post.accountId);
     }
-    if (meta?.code === 190)
-      await store.save({
-        error: "Token expirado ou revogado. Reconecte a conta.",
-      });
     await save({
       status: uncertain
         ? "processing"
@@ -214,6 +211,7 @@ export function firestoreStore(path: string): JobStore {
   return {
     async claim() {
       return db.runTransaction(async (t) => {
+        const context = await readPlanContext(t, db, ref.parent.parent!.path);
         const s = await t.get(ref);
         if (!s.exists) return null;
         const p = s.data() as Post;
@@ -225,6 +223,14 @@ export function firestoreStore(path: string): JobStore {
           Date.parse(p.leaseUntil ?? "1970-01-01") > now
         )
           return null;
+        if (
+          !activeAccountIds(context.subscription, context.accounts).includes(
+            p.accountId,
+          ) &&
+          !p.uncertain &&
+          p.phase !== "publishing"
+        )
+          return null;
         revision = p.revision;
         leaseId = randomUUID();
         t.update(ref, {
@@ -232,6 +238,14 @@ export function firestoreStore(path: string): JobStore {
           status: "processing",
           leaseUntil: new Date(now + 120000).toISOString(),
         });
+        if (p.status !== "processing")
+          t.set(db.collection(`${ref.parent.parent!.path}/history`).doc(), {
+            postId: ref.id,
+            accountId: p.accountId,
+            caption: p.caption,
+            status: "processing",
+            at: new Date(now).toISOString(),
+          });
         return { ...p, id: ref.id };
       });
     },
@@ -250,12 +264,19 @@ export function firestoreStore(path: string): JobStore {
             },
             { merge: true },
           );
-        const event = db.collection(`${ref.parent.parent!.path}/history`).doc();
-        t.set(event, {
-          postId: ref.id,
-          ...patch,
-          at: new Date().toISOString(),
-        });
+        const previous = s.data()!;
+        if (
+          (patch.status && patch.status !== previous.status) ||
+          (patch.error && patch.error !== previous.error)
+        )
+          t.set(db.collection(`${ref.parent.parent!.path}/history`).doc(), {
+            postId: ref.id,
+            accountId: previous.accountId ?? "",
+            caption: previous.caption ?? "",
+            status: patch.status ?? previous.status,
+            ...(patch.error ? { error: patch.error } : {}),
+            at: new Date().toISOString(),
+          });
       });
     },
     async invalidateAccount(id) {
@@ -282,12 +303,10 @@ export function firestoreStore(path: string): JobStore {
           const d = await db.doc(`${ws}/media/${id}`).get();
           if (!d.exists) throw Error("Mídia ausente.");
           const m = d.data() as Media;
-          const [url] = await bucket
-            .file(m.path)
-            .getSignedUrl({
-              action: "read",
-              expires: Date.now() + 2 * 3600000,
-            });
+          const [url] = await bucket.file(m.path).getSignedUrl({
+            action: "read",
+            expires: Date.now() + 2 * 3600000,
+          });
           return { ...m, id, url };
         }),
       );
@@ -296,18 +315,61 @@ export function firestoreStore(path: string): JobStore {
 }
 export async function runScheduler() {
   const db = admin().db;
-  const due = await db
+  const query = db
     .collectionGroup("posts")
     .where("status", "in", ["scheduled", "processing"])
     .where("scheduledAt", "<=", new Date().toISOString())
-    .limit(50)
-    .get();
+    .orderBy("scheduledAt");
+  const eligible: QueryDocumentSnapshot[] = [];
+  const access = new Map<string, Promise<string[]>>();
+  let cursor: QueryDocumentSnapshot | undefined;
+  let scanned = 0;
+  while (eligible.length < 50) {
+    const page = await (cursor ? query.startAfter(cursor) : query)
+      .limit(100)
+      .get();
+    if (page.empty) break;
+    for (const doc of page.docs) {
+      scanned++;
+      const base = doc.ref.parent.parent!.path;
+      if (!access.has(base))
+        access.set(
+          base,
+          Promise.all([
+            db.doc(base).get(),
+            db.collection(`${base}/accounts`).get(),
+          ]).then(([workspace, accounts]) =>
+            activeAccountIds(
+              subscriptionOf(workspace.data()),
+              accounts.docs.map(
+                (account) => ({ ...account.data(), id: account.id }) as Account,
+              ),
+            ),
+          ),
+        );
+      const post = doc.data() as Post;
+      if (
+        Date.parse(post.nextAttemptAt ?? "1970-01-01") > Date.now() ||
+        Date.parse(post.leaseUntil ?? "1970-01-01") > Date.now()
+      )
+        continue;
+      if (
+        (await access.get(base))!.includes(post.accountId) ||
+        post.uncertain ||
+        post.phase === "publishing"
+      )
+        eligible.push(doc);
+      if (eligible.length >= 50) break;
+    }
+    if (page.size < 100) break;
+    cursor = page.docs.at(-1);
+  }
   const results = await Promise.allSettled(
-    due.docs.map((d) => processJob(firestoreStore(d.ref.path))),
+    eligible.map((doc) => processJob(firestoreStore(doc.ref.path))),
   );
   return {
-    scanned: due.size,
-    errors: results.filter((r) => r.status === "rejected").length,
+    scanned,
+    errors: results.filter((result) => result.status === "rejected").length,
   };
 }
 export async function renewAccounts() {

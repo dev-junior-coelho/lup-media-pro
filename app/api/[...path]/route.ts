@@ -7,7 +7,9 @@ async function handler(
   ctx: { params: Promise<{ path: string[] }> },
 ) {
   try {
-    return await api(req, (await ctx.params).path);
+    const response = await api(req, (await ctx.params).path);
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
   } catch (e) {
     if (!(e instanceof HttpError) && !(e instanceof ZodError))
       console.error("api_failure", {
@@ -25,7 +27,7 @@ async function handler(
               ? "Dados inválidos. Verifique os campos."
               : "Não foi possível concluir a operação. Verifique a configuração do servidor.",
       },
-      { status },
+      { status, headers: { "Cache-Control": "private, no-store" } },
     );
   }
 }

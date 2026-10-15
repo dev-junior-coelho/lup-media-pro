@@ -117,3 +117,60 @@ it("protege upload, download e formatos", async () => {
   );
   expect(bytes.length).toBe(3);
 });
+
+it("protege a assinatura e as listas de seguidores por perfil", async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "workspaces/a"), {
+      subscription: { plan: "essential", status: "active" },
+    });
+    await setDoc(doc(context.firestore(), "workspaces/a/followers/111"), {
+      users: ["ana"],
+    });
+  });
+  await assertSucceeds(
+    getDoc(
+      doc(
+        env.authenticatedContext("alice").firestore(),
+        "workspaces/a/followers/111",
+      ),
+    ),
+  );
+  await assertFails(
+    getDoc(
+      doc(
+        env.authenticatedContext("bob").firestore(),
+        "workspaces/a/followers/111",
+      ),
+    ),
+  );
+  await assertFails(
+    setDoc(
+      doc(env.authenticatedContext("alice").firestore(), "workspaces/a"),
+      { subscription: { plan: "pro", status: "active" } },
+      { merge: true },
+    ),
+  );
+  await assertFails(
+    setDoc(
+      doc(
+        env.authenticatedContext("alice").firestore(),
+        "workspaces/a/followers/111",
+      ),
+      { users: ["changed"] },
+    ),
+  );
+});
+
+it("bloqueia acesso direto a solicitações, auditoria administrativa e preços", async () => {
+  const db = env.authenticatedContext("alice").firestore();
+  for (const path of [
+    "planRequests/a",
+    "planAudit/event",
+    "commercialSettings/plans",
+  ]) {
+    await assertFails(getDoc(doc(db, path)));
+    await assertFails(
+      setDoc(doc(db, path), { platformAdmin: true, plan: "pro" }),
+    );
+  }
+});

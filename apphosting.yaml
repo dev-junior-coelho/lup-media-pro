@@ -33,7 +33,7 @@ env:
     value: "v24.0"
     availability: [RUNTIME]
   - variable: APP_ORIGIN
-    value: "https://lup-media-pro--lup-media-pro.us-central1.hosted.app"
+    value: "https://lup-media-pro.web.app"
     availability: [RUNTIME]
   - variable: TOKEN_ENCRYPTION_KEY
     secret: TOKEN_ENCRYPTION_KEY
@@ -46,4 +46,7 @@ env:
     availability: [RUNTIME]
   - variable: LEGACY_MIGRATION_OWNER_UID
     value: "tfE1dgrRCuZxyFa3ZCgSAdUt2YU2"
+    availability: [RUNTIME]
+  - variable: META_REDIRECT_URI
+    value: "https://lup-media-pro--lup-media-pro.us-central1.hosted.app/api/auth/instagram/callback"
     availability: [RUNTIME]

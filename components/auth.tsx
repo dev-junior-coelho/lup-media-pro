@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -14,29 +14,58 @@ export function Auth() {
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
-  const configured = !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const pending = useRef(false);
+  const configured = Boolean(
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
+    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  );
+  function changeMode(next: typeof mode) {
+    if (pending.current) return;
+    setMode(next);
+    setError("");
+    setMessage("");
+  }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (pending.current || !configured) return;
+    pending.current = true;
     setError("");
     setMessage("");
     setBusy(true);
     try {
       const auth = firebaseClient()!.auth;
       if (mode === "reset") {
-        await sendPasswordResetEmail(auth, email);
+        await sendPasswordResetEmail(auth, email.trim());
         setMessage(
           "Se houver uma conta para esse e-mail, você receberá as instruções.",
         );
       } else if (mode === "signup")
-        await createUserWithEmailAndPassword(auth, email, password);
-      else await signInWithEmailAndPassword(auth, email, password);
-    } catch {
+        await createUserWithEmailAndPassword(auth, email.trim(), password);
+      else await signInWithEmailAndPassword(auth, email.trim(), password);
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      const messages: Record<string, string> = {
+        "auth/invalid-credential":
+          "E-mail ou senha incorretos. Confira os dados e tente novamente.",
+        "auth/email-already-in-use":
+          "Não foi possível criar a conta. Tente entrar ou recuperar sua senha.",
+        "auth/weak-password": "Escolha uma senha com pelo menos 8 caracteres.",
+        "auth/too-many-requests":
+          "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
+        "auth/network-request-failed":
+          "Não foi possível conectar. Verifique sua internet e tente novamente.",
+      };
       setError(
-        mode === "reset"
-          ? "Não foi possível solicitar a recuperação. Tente novamente."
-          : "Não foi possível entrar. Verifique os dados e a configuração do Firebase.",
+        messages[code ?? ""] ??
+          (mode === "reset"
+            ? "Não foi possível solicitar a recuperação. Tente novamente."
+            : mode === "signup"
+              ? "Não foi possível criar a conta. Tente novamente."
+              : "Não foi possível entrar. Tente novamente em instantes."),
       );
     } finally {
+      pending.current = false;
       setBusy(false);
     }
   }
@@ -54,8 +83,8 @@ export function Auth() {
         </p>
         {!configured && (
           <div className="info-alert">
-            Firebase independente ainda não configurado. Defina as variáveis do
-            projeto para habilitar login e persistência.
+            O acesso está temporariamente indisponível. A configuração do
+            serviço precisa ser concluída.
           </div>
         )}
         <form onSubmit={submit}>
@@ -83,7 +112,7 @@ export function Auth() {
                 id="password"
                 className="proinput"
                 type="password"
-                minLength={8}
+                minLength={mode === "signup" ? 8 : 1}
                 required
                 autoComplete={
                   mode === "signup" ? "new-password" : "current-password"
@@ -120,19 +149,15 @@ export function Auth() {
         <div className="flex">
           <button
             className="qsmall"
-            onClick={() => {
-              setMode(mode === "signup" ? "login" : "signup");
-              setError("");
-            }}
+            disabled={busy}
+            onClick={() => changeMode(mode === "signup" ? "login" : "signup")}
           >
             {mode === "signup" ? "Já tenho conta" : "Criar conta"}
           </button>
           <button
             className="qsmall"
-            onClick={() => {
-              setMode(mode === "reset" ? "login" : "reset");
-              setError("");
-            }}
+            disabled={busy}
+            onClick={() => changeMode(mode === "reset" ? "login" : "reset")}
           >
             {mode === "reset" ? "Voltar ao login" : "Esqueci minha senha"}
           </button>

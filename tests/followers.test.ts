@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import JSZip from "jszip";
 import {
   compare,
+  followerRelations,
   parseExport,
   restoreFollowers,
   importZip,
+  importFollowerFiles,
   differences,
   profileLink,
 } from "../lib/shared/followers";
@@ -105,4 +107,81 @@ describe("exportações e migração", () => {
     );
     expect(() => profileLink("../evil", "app", true)).toThrow();
   });
+});
+
+it("ignora entradas vazias e preserva nomes reais presentes no arquivo", () => {
+  const parsed = parseExport(
+    "following.json",
+    JSON.stringify([
+      null,
+      { username: "ana", full_name: "Ana Silva", string_list_data: [] },
+    ]),
+  );
+  expect(parsed.users).toEqual(["ana"]);
+  expect(parsed.displayNames).toEqual({ ana: "Ana Silva" });
+});
+it("normaliza nomes de usuário do backup e preserva nomes já cadastrados", () => {
+  const result = restoreFollowers(
+    { users: ["@Ana", "ANA"], displayNames: { ana: "Nome antigo" } },
+    {
+      ...emptyFollowers,
+      displayNames: { ana: "Ana Silva" },
+    },
+  );
+  expect(result.users).toEqual(["ana"]);
+  expect(result.displayNames.ana).toBe("Ana Silva");
+});
+
+it("calcula relações distintas e Todos inclui seguidores e seguindo sem duplicatas", () => {
+  const result = followerRelations({ ...emptyFollowers, following: ["Ana", "bia"], followers: ["ana", "caio"], users: ["bia"] });
+  expect(result.available).toBe(true);
+  expect(result.groups).toEqual({ all: ["ana", "bia", "caio"], following: ["ana", "bia"], followers: ["ana", "caio"], notFollowingBack: ["bia"], fans: ["caio"], mutual: ["ana"] });
+});
+it("não inventa relações para backup legado ou lista ausente", () => {
+  const result = followerRelations({ ...emptyFollowers, users: ["ana"], following: ["ana"] });
+  expect(result.available).toBe(false);
+  expect(result.groups.notFollowingBack).toEqual([]);
+  expect(result.groups.all).toEqual(["ana"]);
+});
+it("reconhece lista vazia quando a importação registrou ambas as listas", () => {
+  const result = followerRelations({ ...emptyFollowers, following: ["ana"], source: { name: "Exportação Instagram", updated: "2026-10-14T12:00:00Z", partial: false, following: 1, followers: 0 } });
+  expect(result.available).toBe(true);
+  expect(result.groups.notFollowingBack).toEqual(["ana"]);
+});
+it("importa JSON com BOM, título e link sem value", () => {
+  const result = parseExport("following.json", '\uFEFF' + JSON.stringify({ relationships_following: [
+    { title: "Ana", string_list_data: [{ href: "https://www.instagram.com/_u/ana/", timestamp: 10 }] },
+    { string_list_data: [{ href: "https://www.instagram.com/bia/", timestamp: 20 }] }
+  ] }));
+  expect(result.users).toEqual(["ana", "bia"]);
+  expect(result.timestamps).toEqual({ ana: 10000, bia: 20000 });
+});
+it("rejeita conteúdo não vazio que não reconhece, sem substituir a lista por vazio", () => {
+  expect(() => parseExport("followers.json", JSON.stringify([{ unexpected: true }]))).toThrow("Nenhum perfil reconhecido");
+});
+it("importa arquivos numerados e combina todos os segmentos sem perder marcações", async () => {
+  const zip = new JSZip();
+  zip.file("connections/following_1.json", JSON.stringify({ relationships_following: [{ title: "ana", string_list_data: [{ timestamp: 10 }] }, { title: "bia" }] }));
+  zip.file("connections/followers_1.json", JSON.stringify([{ string_list_data: [{ value: "ana" }] }]));
+  zip.file("connections/followers_2.json", JSON.stringify([{ string_list_data: [{ value: "caio" }] }]));
+  const result = await importZip(new Blob([new Uint8Array(await zip.generateAsync({ type: "uint8array" }))]), { ...emptyFollowers, protected: ["bia"] });
+  expect(result.following).toEqual(["ana", "bia"]);
+  expect(result.followers).toEqual(["ana", "caio"]);
+  expect(result.users).toEqual(["bia"]);
+  expect(result.protected).toEqual(["bia"]);
+  expect(followerRelations(result).groups.mutual).toEqual(["ana"]);
+});
+
+it("importa JSON e HTML extraídos juntos e preserva marcações", async () => {
+  const result = await importFollowerFiles([
+    new File(['{"relationships_following":[{"title":"ana"},{"title":"bia"}]}'], "following.json"),
+    new File(['<a href="https://www.instagram.com/ana/">ana</a>'], "followers_1.html"),
+  ], { ...emptyFollowers, protected: ["bia"] });
+  expect(result.following).toEqual(["ana", "bia"]);
+  expect(result.followers).toEqual(["ana"]);
+  expect(result.users).toEqual(["bia"]);
+  expect(result.protected).toEqual(["bia"]);
+});
+it("rejeita importação avulsa incompleta com orientação", async () => {
+  await expect(importFollowerFiles([new File(['[]'], "following.json")], emptyFollowers)).rejects.toThrow("Selecione following");
 });

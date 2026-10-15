@@ -19,6 +19,22 @@ export function compare(following: string[], followers: string[]) {
     mutual: [...a].filter((x) => b.has(x)),
   };
 }
+export function followerRelations(data: Followers) {
+  const following = clean(data.following), followers = clean(data.followers);
+  // Counts recorded during import distinguish an empty list from a missing list.
+  const available = (following.length > 0 && followers.length > 0) ||
+    (data.source?.following === following.length && data.source?.followers === followers.length);
+  const comparison = compare(following, followers);
+  const groups = {
+    all: clean([...following, ...followers, ...data.users]),
+    following,
+    followers,
+    notFollowingBack: available ? comparison.notFollowingBack : [],
+    fans: available ? comparison.fans : [],
+    mutual: available ? comparison.mutual : [],
+  };
+  return { available, groups };
+}
 export function differences(before: string[], after: string[]) {
   const a = new Set(before),
     b = new Set(after);
@@ -30,9 +46,14 @@ export function differences(before: string[], after: string[]) {
 export function parseExport(
   path: string,
   text: string,
-): { users: string[]; timestamps: Record<string, number> } {
+): {
+  users: string[];
+  timestamps: Record<string, number>;
+  displayNames?: Record<string, string>;
+} {
   const users: string[] = [],
-    timestamps: Record<string, number> = {};
+    timestamps: Record<string, number> = {},
+    displayNames: Record<string, string> = {};
   const add = (v: unknown, t = 0) => {
     if (typeof v !== "string") return;
     const n = normalize(v);
@@ -42,28 +63,51 @@ export function parseExport(
     }
   };
   if (path.endsWith(".json")) {
-    const data = JSON.parse(text);
+    const data = JSON.parse(text.replace(/^\uFEFF/, ""));
     const items = Array.isArray(data)
       ? data
-      : (data.relationships_following ??
-        data.relationships_followers ??
-        data.followers ??
-        data.following);
+      : (data?.relationships_following ??
+        data?.relationships_followers ??
+        data?.followers ??
+        data?.following);
     if (!Array.isArray(items)) throw Error("Formato JSON desconhecido.");
     for (const item of items) {
       if (typeof item === "string") add(item);
-      else
-        for (const s of item.string_list_data ?? [
-          { value: item.title ?? item.username },
-        ])
-          add(s.value, Number(s.timestamp ?? 0) * 1000);
+      else if (item && typeof item === "object") {
+        const entries =
+          Array.isArray(item.string_list_data) && item.string_list_data.length
+            ? item.string_list_data
+            : [{ value: item.title ?? item.username }];
+        for (const entry of entries) {
+          if (!entry || typeof entry !== "object") continue;
+          let handle = entry.value || item.title || item.username;
+          if (!handle && typeof entry.href === "string") {
+            const match = entry.href.match(/^https?:\/\/(?:www\.)?instagram\.com\/(?:_u\/)?([a-z0-9._]{1,30})\/?(?:[?#].*)?$/i);
+            handle = match?.[1];
+          }
+          const timestamp = Number(entry.timestamp ?? 0) * 1000;
+          add(handle, Number.isFinite(timestamp) ? timestamp : 0);
+          const name = item.full_name ?? item.display_name;
+          if (
+            typeof name === "string" &&
+            name.trim() &&
+            typeof handle === "string"
+          )
+            displayNames[normalize(handle)] = name.trim().slice(0, 100);
+        }
+      }
     }
+    if (items.length && !users.length) throw Error(`Nenhum perfil reconhecido em ${path}. Confira o formato da exportação.`);
   } else {
     const re =
       /href\s*=\s*["']https?:\/\/(?:www\.)?instagram\.com\/(?:_u\/)?([a-z0-9._]{1,30})(?:[\/\?#][^"']*)?["']/gi;
     for (const m of text.matchAll(re)) add(m[1]);
   }
-  return { users: clean(users), timestamps };
+  return {
+    users: clean(users),
+    timestamps,
+    ...(Object.keys(displayNames).length ? { displayNames } : {}),
+  };
 }
 export async function importZip(
   file: Blob,
@@ -72,27 +116,44 @@ export async function importZip(
   if (file.size > 100 * 1024 * 1024) throw Error("ZIP excede 100 MB.");
   const zip = await JSZip.loadAsync(await file.arrayBuffer());
   const selected = Object.values(zip.files).filter((f) =>
-    /(?:^|\/)(followers(?:_\d+)?|following)\.(json|html)$/i.test(f.name),
+    /(?:^|\/)(followers(?:_\d+)?|following(?:_\d+)?)\.(json|html)$/i.test(f.name),
   );
   if (selected.length > 100) throw Error("Exportação com arquivos demais.");
-  const following: string[] = [],
-    followers: string[] = [],
-    timestamps: Record<string, number> = {};
-  let hasFollowing = false,
-    hasFollowers = false,
-    total = 0;
-  for (const f of selected) {
-    const declared =
-      (f as unknown as { _data?: { uncompressedSize?: number } })._data
-        ?.uncompressedSize ?? 0;
-    if (declared > 10 * 1024 * 1024 || total + declared > 30 * 1024 * 1024)
-      throw Error("ZIP expandido excede limite.");
-    const t = await f.async("string");
+  return importFollowerEntries(selected.map((file) => ({
+    name: file.name,
+    declaredSize: (file as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize ?? 0,
+    read: () => file.async("string"),
+  })), current);
+}
+
+export async function importFollowerFiles(files: File[], current: Followers): Promise<Followers> {
+  if (!files.length) throw Error("Selecione os arquivos de seguidores e seguindo.");
+  if (files.some((file) => /\.zip$/i.test(file.name))) {
+    if (files.length !== 1) throw Error("Selecione um único ZIP ou os arquivos JSON/HTML extraídos.");
+    return importZip(files[0], current);
+  }
+  const pattern = /(?:^|\/)(followers(?:_\d+)?|following(?:_\d+)?)\.(json|html)$/i;
+  if (files.some((file) => !pattern.test(file.name)))
+    throw Error("Selecione following.json/html e todos os arquivos followers_1.json/html, followers_2 etc., ou o ZIP original.");
+  return importFollowerEntries(files.map((file) => ({ name: file.name, declaredSize: file.size, read: () => file.text() })), current);
+}
+
+async function importFollowerEntries(entries: { name: string; declaredSize: number; read: () => Promise<string> }[], current: Followers): Promise<Followers> {
+  if (entries.length > 100) throw Error("Exportação com arquivos demais.");
+  const following: string[] = [], followers: string[] = [],
+    timestamps: Record<string, number> = {}, displayNames = { ...current.displayNames };
+  let hasFollowing = false, hasFollowers = false, total = 0;
+  for (const f of entries) {
+    if (f.declaredSize > 10 * 1024 * 1024 || total + f.declaredSize > 30 * 1024 * 1024)
+      throw Error("Arquivos expandidos excedem o limite de 30 MB (10 MB por arquivo).");
+    const t = await f.read();
     total += t.length;
     if (t.length > 10 * 1024 * 1024 || total > 30 * 1024 * 1024)
-      throw Error("ZIP expandido excede limite.");
+      throw Error("Arquivos expandidos excedem o limite de 30 MB (10 MB por arquivo).");
     const p = parseExport(f.name.toLowerCase(), t);
-    if (/(?:^|\/)following\./i.test(f.name)) {
+    for (const [user, name] of Object.entries(p.displayNames ?? {}))
+      if (!displayNames[user]) displayNames[user] = name;
+    if (/(?:^|\/)following(?:_\d+)?\./i.test(f.name)) {
       following.push(...p.users);
       Object.assign(timestamps, p.timestamps);
       hasFollowing = true;
@@ -102,7 +163,9 @@ export async function importZip(
     }
   }
   if (!hasFollowing || !hasFollowers)
-    throw Error("O ZIP precisa conter seguidores e seguindo.");
+    throw Error("A importação precisa conter seguidores e seguindo. Selecione following e todos os arquivos followers juntos, ou o ZIP completo.");
+  if (!following.length && !followers.length)
+    throw Error("Nenhum perfil reconhecido nos arquivos. Confira se a exportação contém Seguidores e seguindo em JSON ou HTML.");
   const a = clean(following),
     b = clean(followers);
   return followerSchema.parse({
@@ -111,6 +174,7 @@ export async function importZip(
     following: a,
     followers: b,
     timestamps,
+    displayNames,
     source: {
       name: "Exportação Instagram",
       updated: new Date().toISOString(),
@@ -136,10 +200,25 @@ export function restoreFollowers(raw: unknown, current: Followers): Followers {
       !Array.isArray((candidate as Record<string, unknown>).completed))
   )
     throw Error("Backup inválido.");
+  const normalized = { ...(candidate as Record<string, unknown>) };
+  for (const key of [
+    "users",
+    "completed",
+    "protected",
+    "followers",
+    "following",
+  ]) {
+    if (Array.isArray(normalized[key]))
+      normalized[key] = clean(
+        (normalized[key] as unknown[]).filter(
+          (v): v is string => typeof v === "string",
+        ),
+      );
+  }
   const parsed = followerSchema.parse({
     ...emptyFollowers,
     ...current,
-    ...(candidate as object),
+    ...normalized,
   });
   const protectedUsers = clean([...current.protected, ...parsed.protected]);
   return {
@@ -149,14 +228,17 @@ export function restoreFollowers(raw: unknown, current: Followers): Followers {
       (u) => !protectedUsers.includes(u),
     ),
     protected: protectedUsers,
-    history: [...current.history, ...parsed.history]
-      .filter(
-        (v, i, a) =>
-          a.findIndex(
-            (x) => x.at === v.at && x.user === v.user && x.action === v.action,
-          ) === i,
-      )
-      .slice(-10000),
+    followers: clean(parsed.followers),
+    following: clean(parsed.following),
+    displayNames: { ...parsed.displayNames, ...current.displayNames },
+    history: [
+      ...new Map(
+        [...current.history, ...parsed.history].map((event) => [
+          `${event.at}:${event.user}:${event.action}`,
+          event,
+        ]),
+      ).values(),
+    ].slice(-10000),
   };
 }
 export function profileLink(user: string, mode: string, android: boolean) {

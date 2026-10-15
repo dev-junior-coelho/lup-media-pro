@@ -1,15 +1,30 @@
 import { z } from "zod";
+import { mediaIssue } from "./media-format";
 export const roleSchema = z.enum(["owner", "admin", "editor", "viewer"]);
-export const postInput = z.object({
-  id: z.string().uuid().optional(),
-  type: z.enum(["post", "carousel", "reel", "story"]),
-  caption: z.string().max(2200),
-  accountId: z.string().max(100).default(""),
-  mediaIds: z.array(z.string().uuid()).max(10),
-  scheduledAt: z.string().datetime().nullable(),
-  intent: z.enum(["draft", "schedule", "now"]),
-  revision: z.number().int().nonnegative().optional(),
-});
+export const postInput = z
+  .object({
+    id: z.string().uuid().optional(),
+    type: z.enum(["post", "carousel", "reel", "story"]),
+    caption: z.string().max(2200),
+    accountId: z
+      .string()
+      .regex(/^[a-zA-Z0-9_-]{0,100}$/)
+      .default(""),
+    mediaIds: z
+      .array(z.string().uuid())
+      .max(10)
+      .refine(
+        (ids) => new Set(ids).size === ids.length,
+        "Selecione cada mídia apenas uma vez.",
+      ),
+    scheduledAt: z.string().datetime().nullable(),
+    intent: z.enum(["draft", "schedule", "now"]),
+    revision: z.number().int().nonnegative().optional(),
+  })
+  .refine((value) => value.intent === "draft" || Boolean(value.accountId), {
+    message: "Selecione uma conta conectada.",
+    path: ["accountId"],
+  });
 export type PostInput = z.infer<typeof postInput>;
 export type Status =
   "draft" | "scheduled" | "processing" | "published" | "failed" | "cancelled";
@@ -57,6 +72,7 @@ export interface Account {
   expiresAt: string;
   permissions: string[];
   status: string;
+  planPaused?: boolean;
 }
 export const handles = z
   .array(z.string().regex(/^[a-z0-9._]{1,30}$/i))
@@ -67,6 +83,12 @@ export const followerSchema = z.object({
   protected: handles.default([]),
   followers: handles.default([]),
   following: handles.default([]),
+  displayNames: z
+    .record(
+      z.string().regex(/^[a-z0-9._]{1,30}$/i),
+      z.string().trim().min(1).max(100),
+    )
+    .default({}),
   timestamps: z.record(z.string(), z.number()).default({}),
   history: z
     .array(
@@ -96,6 +118,7 @@ export const emptyFollowers: Followers = {
   protected: [],
   followers: [],
   following: [],
+  displayNames: {},
   timestamps: {},
   history: [],
   linkMode: "app",
@@ -122,6 +145,7 @@ export function validatePublication(
   if (
     !account ||
     account.status !== "connected" ||
+    !Number.isFinite(Date.parse(account.expiresAt)) ||
     Date.parse(account.expiresAt) <= now
   )
     throw Error("Conta desconectada ou token expirado. Reconecte o Instagram.");
@@ -129,7 +153,9 @@ export function validatePublication(
     throw Error("Permissão de publicação não concedida.");
   if (
     input.intent === "schedule" &&
-    (!input.scheduledAt || Date.parse(input.scheduledAt) <= now)
+    (!input.scheduledAt ||
+      !Number.isFinite(Date.parse(input.scheduledAt)) ||
+      Date.parse(input.scheduledAt) <= now)
   )
     throw Error("Escolha um horário futuro.");
   if (
@@ -141,31 +167,7 @@ export function validatePublication(
   if (input.type === "story" && account.accountType !== "BUSINESS")
     throw Error("Stories exigem conta Business e suporte da API.");
   for (const m of media) {
-    const r = m.width / m.height;
-    if (input.type === "post" || input.type === "carousel") {
-      if (
-        m.mime !== "image/jpeg" ||
-        m.size > 8 * 1024 * 1024 ||
-        r < 0.8 ||
-        r > 1.91 ||
-        m.width < 320 ||
-        m.width > 1440
-      )
-        throw Error(
-          "Imagens: JPEG, até 8 MB, largura 320–1440 px e proporção 4:5 a 1,91:1.",
-        );
-    } else if (m.mime.startsWith("video/")) {
-      if (
-        m.size > 300 * 1024 * 1024 ||
-        m.duration < 3 ||
-        m.duration > (input.type === "story" ? 60 : 900) ||
-        r < 0.5 ||
-        r > 1.91
-      )
-        throw Error("Vídeo inválido: verifique duração, tamanho e proporção.");
-    } else if (input.type === "reel")
-      throw Error("Reels exigem vídeo MP4/MOV.");
-    else if (m.mime !== "image/jpeg" || m.size > 8 * 1024 * 1024)
-      throw Error("Story com imagem exige JPEG até 8 MB.");
+    const issue = mediaIssue(m, input.type);
+    if (issue) throw Error(issue);
   }
 }

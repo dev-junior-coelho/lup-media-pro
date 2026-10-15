@@ -14,7 +14,9 @@
     "emulators": "firebase emulators:start --project demo-lup-media-pro --only auth,firestore,storage",
     "check": "npm run typecheck && npm run lint && npm test && npm run build",
     "test:e2e:emulators": "firebase emulators:exec --project demo-lup-media-pro --only auth,firestore,storage 'LUP_E2E_EMULATORS=true playwright test'",
-    "dev:emulators": "firebase emulators:exec --project demo-lup-media-pro --only auth,firestore,storage 'node scripts/dev-emulators.mjs'"
+    "dev:emulators": "firebase emulators:exec --project demo-lup-media-pro --only auth,firestore,storage 'node scripts/dev-emulators.mjs'",
+    "plan:set": "tsx scripts/set-plan.ts",
+    "admin:access": "tsx scripts/manage-platform-admin.ts"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.0.0",

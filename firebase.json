@@ -47,7 +47,38 @@
       "**/.env*",
       "**/*-debug.log",
       "functions/lib",
-      "gha-creds-*.json"
+      "gha-creds-*.json",
+      ".next-e2e",
+      "functions/node_modules"
+    ]
+  },
+  "hosting": {
+    "site": "lup-media-pro",
+    "public": "hosting",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "lup-media-pro",
+          "region": "us-central1"
+        }
+      }
+    ],
+    "headers": [
+      {
+        "source": "/api/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "private, no-store"
+          }
+        ]
+      }
     ]
   }
 }

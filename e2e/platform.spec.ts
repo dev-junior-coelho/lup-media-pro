@@ -89,6 +89,9 @@ test("cadastro, login, rascunho, mídia, agenda, cancelamento e migração", asy
       ],
       status: "connected",
     });
+  await admin()
+    .db.doc(`workspaces/${ws}`)
+    .update({ "subscription.activeAccountIds": ["test-ig"] });
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "Calendário de conteúdo" }),
@@ -102,8 +105,9 @@ test("cadastro, login, rascunho, mídia, agenda, cancelamento e migração", asy
   await page
     .getByRole("button", { name: "Agendar publicação", exact: true })
     .click();
+  await page.getByRole("dialog", { name: "Pré-visualizar publicação" }).getByRole("button", { name: "Confirmar agendamento" }).click();
   await expect(
-    page.getByText("Agendamento testado", { exact: true }),
+    page.locator(".itemcard").getByText("Agendamento testado", { exact: true }),
   ).toBeVisible();
   const scheduled = page
     .locator(".itemcard")
@@ -113,6 +117,7 @@ test("cadastro, login, rascunho, mídia, agenda, cancelamento e migração", asy
   await page
     .getByRole("button", { name: "Agendar publicação", exact: true })
     .click();
+  await page.getByRole("dialog", { name: "Pré-visualizar publicação" }).getByRole("button", { name: "Confirmar agendamento" }).click();
   await expect(page.getByText(/21\/01\/2027/)).toBeVisible();
   await page
     .locator(".itemcard")
@@ -124,7 +129,7 @@ test("cadastro, login, rascunho, mídia, agenda, cancelamento e migração", asy
       .locator(".itemcard .statuspill")
       .getByText("Cancelado", { exact: true }),
   ).toBeVisible();
-  await navigate("Backup e migração");
+  await navigate("Importação e backup");
   page.once("dialog", (d) => d.accept());
   await page
     .getByRole("button", { name: "Importar lista e dados locais anteriores" })
@@ -141,14 +146,18 @@ test("cadastro, login, rascunho, mídia, agenda, cancelamento e migração", asy
   await first
     .getByRole("button", { name: `Marcar concluído @${handle}`, exact: true })
     .click();
-  await page.getByRole("button", { name: "Concluídos", exact: true }).click();
+  await page.getByRole("combobox", { name: "Marcação", exact: true }).selectOption("done");
   await expect(page.locator(".profile .handle")).toHaveText("@" + handle);
-  await navigate("Importação ZIP");
+  await navigate("Importação e backup");
   const zip = new JSZip();
   zip.file(
     "following.json",
     JSON.stringify({
-      relationships_following: [{ title: handle }, { title: "other" }],
+      relationships_following: [
+        { title: handle },
+        { title: "other" },
+        { title: "name_test" },
+      ],
     }),
   );
   zip.file(
@@ -163,9 +172,26 @@ test("cadastro, login, rascunho, mídia, agenda, cancelamento e migração", asy
   });
   await expect(page.locator(".notification")).toContainText("concluída");
   await navigate("Seguidores");
-  await page.getByRole("button", { name: "Concluídos", exact: true }).click();
+  await page.getByRole("combobox", { name: "Marcação", exact: true }).selectOption("done");
   await expect(page.locator(".profile .handle")).toHaveText("@" + handle);
-  await navigate("Backup e migração");
+  await navigate("Modo rápido");
+  await page
+    .getByRole("button", { name: "Adicionar nome", exact: true })
+    .click();
+  await page
+    .getByLabel("Nome da pessoa", { exact: true })
+    .fill("Pessoa de teste");
+  await page.getByRole("button", { name: "Salvar nome", exact: true }).click();
+  await expect(page.locator(".quick-name")).toHaveText("Pessoa de teste");
+  await expect(page.locator(".quick-handle")).toContainText("@");
+  await page.screenshot({
+    path: `test-results/quick-${isMobile ? "mobile" : "desktop"}.png`,
+    fullPage: true,
+  });
+  await navigate("Importação e backup");
+  const postCountBeforeRestore = (
+    await admin().db.collection(`workspaces/${ws}/posts`).get()
+  ).size;
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Baixar backup" }).click();
   const backup = JSON.parse(
@@ -180,8 +206,11 @@ test("cadastro, login, rascunho, mídia, agenda, cancelamento e migração", asy
     buffer: Buffer.from(JSON.stringify(backup)),
   });
   await expect(page.locator(".notification")).toContainText("concluída");
+  expect(
+    (await admin().db.collection(`workspaces/${ws}/posts`).get()).size,
+  ).toBe(postCountBeforeRestore);
   await navigate("Seguidores");
-  await page.getByRole("button", { name: "Concluídos", exact: true }).click();
+  await page.getByRole("combobox", { name: "Marcação", exact: true }).selectOption("done");
   await expect(page.locator(".profile .handle")).toHaveText("@" + handle);
   expect(
     await page.evaluate(

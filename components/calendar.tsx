@@ -2,21 +2,28 @@
 import { useState } from "react";
 import { formatInTimeZone } from "date-fns-tz";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
-import type { Post } from "@/lib/shared/schema";
+import { statusNames, typeNames } from "@/lib/shared/presentation";
+import type { Post, Account } from "@/lib/shared/schema";
 export function Calendar({
   posts,
   timezone,
   onDay,
   onEdit,
   full = false,
+  accounts = [],
 }: {
   posts: Post[];
+  accounts?: Account[];
   timezone: string;
   onDay: (day: string) => void;
   onEdit: (p: Post) => void;
   full?: boolean;
 }) {
-  const [month, setMonth] = useState(() => new Date()),
+  const localToday = () =>
+    new Date(
+      `${formatInTimeZone(new Date(), timezone, "yyyy-MM-dd")}T12:00:00`,
+    );
+  const [month, setMonth] = useState(localToday),
     [view, setView] = useState("month");
   const y = month.getFullYear(),
     m = month.getMonth(),
@@ -67,7 +74,7 @@ export function Calendar({
           >
             <ChevronRight size={16} />
           </button>
-          <button className="linebutton" onClick={() => setMonth(new Date())}>
+          <button className="linebutton" onClick={() => setMonth(localToday())}>
             Hoje
           </button>
         </div>
@@ -91,13 +98,22 @@ export function Calendar({
       )}
       {view === "list" ? (
         <div className="itemlist">
+          {!posts.some(
+            (p) =>
+              p.scheduledAt &&
+              Number.isFinite(Date.parse(p.scheduledAt)) &&
+              formatInTimeZone(p.scheduledAt, timezone, "yyyy-MM") ===
+                `${y}-${String(m + 1).padStart(2, "0")}`,
+          ) && <p className="empty-state">Nenhuma publicação neste mês.</p>}
           {posts
             .filter(
               (p) =>
                 p.scheduledAt &&
+                Number.isFinite(Date.parse(p.scheduledAt)) &&
                 formatInTimeZone(p.scheduledAt, timezone, "yyyy-MM") ===
                   `${y}-${String(m + 1).padStart(2, "0")}`,
             )
+            .sort((a, b) => a.scheduledAt!.localeCompare(b.scheduledAt!))
             .map((p) => (
               <button
                 className="linebutton"
@@ -105,7 +121,8 @@ export function Calendar({
                 onClick={() => onEdit(p)}
               >
                 {formatInTimeZone(p.scheduledAt!, timezone, "dd/MM HH:mm")} •{" "}
-                {p.caption.slice(0, 50) || p.type} • {p.status}
+                {p.caption.slice(0, 50) || typeNames[p.type]} •{" "}
+                {statusNames[p.status]}
               </button>
             ))}
         </div>
@@ -121,6 +138,7 @@ export function Calendar({
               events = posts.filter(
                 (p) =>
                   p.scheduledAt &&
+                  Number.isFinite(Date.parse(p.scheduledAt)) &&
                   formatInTimeZone(p.scheduledAt, timezone, "yyyy-MM-dd") ===
                     key,
               );
@@ -141,10 +159,14 @@ export function Calendar({
                     key={p.id}
                     className={`calevent ${p.type} ${p.status}`}
                     onClick={() => onEdit(p)}
-                    title={`${p.caption} • ${p.status}`}
+                    title={`${p.caption} • ${statusNames[p.status]}`}
                   >
                     {formatInTimeZone(p.scheduledAt!, timezone, "HH:mm")}{" "}
-                    {p.type} • {p.status}
+                    {typeNames[p.type]} • {statusNames[p.status]}{" "}
+                    {accounts.find((account) => account.id === p.accountId)
+                      ?.username
+                      ? `· @${accounts.find((account) => account.id === p.accountId)!.username}`
+                      : ""}
                   </button>
                 ))}
                 {events.length > 3 && <span>+{events.length - 3}</span>}

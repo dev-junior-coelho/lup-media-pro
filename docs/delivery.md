@@ -23,7 +23,7 @@ Repositório privado: https://github.com/dev-junior-coelho/lup-media-pro
 
 Projeto Firebase independente lup-media-pro: Authentication e Firestore nam5 habilitados; Storage privado criado; App Hosting publicado; duas Functions Gen 2 e jobs habilitados. A execução vazia do scheduler na nuvem foi confirmada por logs 200/scanned=0/errors=0.
 
-Aplicação: https://lup-media-pro--lup-media-pro.us-central1.hosted.app
+Aplicação: https://lup-media-pro.web.app
 
 Callback: https://lup-media-pro--lup-media-pro.us-central1.hosted.app/api/auth/instagram/callback
 

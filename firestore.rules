@@ -5,7 +5,7 @@ service cloud.firestore {
   match /users/{uid} {allow read: if request.auth != null && request.auth.uid == uid; allow write: if false;}
   match /workspaces/{ws} {
    allow read: if member(ws); allow write: if false;
-   match /{collection}/{id} {allow read: if member(ws) && collection in ['members','accounts','posts','media','jobs','history','settings','snapshots','audit']; allow write: if false;}
+   match /{collection}/{id} {allow read: if member(ws) && collection in ['members','accounts','posts','media','jobs','history','settings','followers','snapshots','audit']; allow write: if false;}
   }
   match /{document=**} {allow read,write: if false;}
  }

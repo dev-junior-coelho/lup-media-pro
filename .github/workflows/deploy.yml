@@ -32,3 +32,5 @@ jobs:
       - run: npx firebase deploy --only firestore,storage,functions --project lup-media-pro --non-interactive
       - name: Deploy the validated source to App Hosting
         run: npx firebase deploy --only apphosting --project lup-media-pro --non-interactive
+      - name: Publish the short Firebase address
+        run: npx firebase deploy --only hosting --project lup-media-pro --non-interactive

@@ -36,8 +36,26 @@ export async function identity(req: Request) {
   if (!match) throw new HttpError(401, "Faça login.");
   try {
     return await admin().auth.verifyIdToken(match[1], true);
-  } catch {
-    throw new HttpError(401, "Sessão inválida.");
+  } catch (error) {
+    const code = (error as { code?: string } | null)?.code;
+    if (
+      code &&
+      [
+        "auth/argument-error",
+        "auth/invalid-argument",
+        "auth/invalid-id-token",
+        "auth/id-token-expired",
+        "auth/id-token-revoked",
+        "auth/user-disabled",
+        "auth/user-not-found",
+      ].includes(code)
+    )
+      throw new HttpError(401, "Sessão inválida.");
+    console.error("Falha ao validar sessão no Firebase:", code ?? "unknown");
+    throw new HttpError(
+      503,
+      "Não foi possível validar a sessão no servidor. Tente novamente em instantes.",
+    );
   }
 }
 export async function authorize(req: Request, write = false) {
@@ -50,7 +68,12 @@ export async function authorize(req: Request, write = false) {
   const role = member.data()?.role;
   if (!role || (write && !["owner", "admin", "editor"].includes(role)))
     throw new HttpError(403, "Sem permissão neste workspace.");
-  return { uid: user.uid, ws, role };
+  return {
+    uid: user.uid,
+    ws,
+    role,
+    platformAdmin: user.platformAdmin === true,
+  };
 }
 export function sameOrigin(req: Request) {
   const origin = req.headers.get("origin");

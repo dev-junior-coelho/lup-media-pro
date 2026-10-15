@@ -10,13 +10,12 @@ import {
   Image,
   Users,
   Zap,
-  Heart,
   History,
   Upload,
   Download,
   Settings,
+  ShieldCheck,
   BarChart3,
-  Megaphone,
   Menu,
   Plus,
   LogOut,
@@ -26,13 +25,32 @@ import {
   AlertTriangle,
   Link as LinkIcon,
 } from "lucide-react";
+import { PlanManager } from "./plan-manager";
+import { imageUploadTypes, prepareImage } from "@/lib/client-images";
+import { defaultCatalog, type PlanCatalog } from "@/lib/shared/plan-management";
+import { PlanPanel } from "./plan-panel";
+import { plans, type Subscription } from "@/lib/shared/plans";
 import { Auth } from "./auth";
+import {
+  PublicationHistory,
+  type PublicationEvent,
+} from "./publication-history";
 import { Calendar } from "./calendar";
-import { Composer } from "./composer";
+import { Composer, type ComposerInitial } from "./composer";
 import { FollowerManager } from "./followers";
 import { MediaView } from "./media";
 import { firebaseClient } from "@/lib/firebase-client";
+import { compareFollowerImports } from "@/lib/shared/follower-changes";
+import { MediaCache } from "@/lib/media-cache";
 import { request, mediaBlob } from "@/lib/client-api";
+import {
+  statusNames,
+  typeNames,
+  accountStatusNames,
+  displayDate,
+  filterPosts,
+  postsCsv,
+} from "@/lib/shared/presentation";
 import {
   emptyFollowers,
   type Followers,
@@ -42,24 +60,21 @@ import {
   type PostInput,
 } from "@/lib/shared/schema";
 import {
-  importZip,
+  importFollowerFiles,
   restoreFollowers,
   legacyKeys,
-  differences,
 } from "@/lib/shared/followers";
 interface State {
   posts: Post[];
   accounts: Account[];
   media: Media[];
-  history: {
-    id: string;
-    postId: string;
-    at: string;
-    status?: string;
-    error?: string;
-  }[];
+  history: PublicationEvent[];
   followers: Followers | null;
-  workspace: { name: string; timezone: string };
+  followersByAccount: Record<string, Followers>;
+  role: string;
+  platformAdmin: boolean;
+  planCatalog: PlanCatalog;
+  workspace: { name: string; timezone: string; subscription: Subscription };
 }
 const initialState: State = {
   posts: [],
@@ -67,7 +82,15 @@ const initialState: State = {
   media: [],
   history: [],
   followers: null,
-  workspace: { name: "Meu workspace", timezone: "America/Bahia" },
+  followersByAccount: {},
+  role: "viewer",
+  platformAdmin: false,
+  planCatalog: defaultCatalog,
+  workspace: {
+    name: "Meu workspace",
+    timezone: "America/Bahia",
+    subscription: { plan: "essential", status: "active" },
+  },
 };
 const nav = [
   ["dashboard", "Painel", LayoutDashboard],
@@ -76,22 +99,13 @@ const nav = [
   ["library", "Biblioteca de mídia", Image],
   ["followers", "Seguidores", Users],
   ["quick", "Modo rápido", Zap],
-  ["protected", "Perfis protegidos", Heart],
   ["history", "Histórico", History],
-  ["import", "Importação ZIP", Upload],
-  ["backup", "Backup e migração", Download],
+  ["data", "Importação e backup", Upload],
   ["reports", "Relatórios", BarChart3],
-  ["ads", "Anúncios", Megaphone],
+  ["accounts", "Plano e contas", Instagram],
+  ["plan-manager", "Gestor de planos", ShieldCheck],
   ["settings", "Configurações", Settings],
 ] as const;
-const statusNames: Record<string, string> = {
-  draft: "Rascunho",
-  scheduled: "Agendado",
-  processing: "Processando",
-  published: "Publicado",
-  failed: "Falhou",
-  cancelled: "Cancelado",
-};
 export function App() {
   const [user, setUser] = useState<User | null>(null),
     [ready, setReady] = useState(false),
@@ -102,51 +116,131 @@ export function App() {
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(""),
     [error, setError] = useState(""),
-    [editing, setEditing] = useState<Post | null>(null),
+    [instagramConnection, setInstagramConnection] = useState<{ hostedUrl: string; message: string } | null>(null),
+    [editing, setEditing] = useState<ComposerInitial | null>(null),
     [date, setDate] = useState(""),
     [composerKey, setComposerKey] = useState(0),
     [term, setTerm] = useState(""),
     [status, setStatus] = useState("all"),
     [accountFilter, setAccountFilter] = useState("all"),
+    [selectedAccount, setSelectedAccount] = useState(""),
     [from, setFrom] = useState(""),
     [until, setUntil] = useState("");
-  const urls = useRef(new Map<string, string>()),
-    mounted = useRef(true);
+  const urls = useRef(new MediaCache(mediaBlob)),
+    mounted = useRef(true),
+    refreshVersion = useRef(0),
+    sessionVersion = useRef(0),
+    actionPending = useRef(false),
+    noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const timezone = data.workspace.timezone ?? "America/Bahia";
-  const followers = data.followers ?? emptyFollowers;
+  const subscription = data.workspace.subscription;
+  const selectedInstagram = data.accounts.find(
+    (account) => account.id === selectedAccount,
+  );
+  const followers =
+    selectedAccount === "legacy"
+      ? (data.followers ?? emptyFollowers)
+      : (data.followersByAccount[selectedAccount] ?? emptyFollowers);
+  const selectedPosts =
+    selectedAccount === "all"
+      ? data.posts
+      : data.posts.filter(
+          (post) =>
+            post.accountId ===
+            (selectedAccount === "legacy" ? "" : selectedAccount),
+        );
+  const selectedHistory =
+    selectedAccount === "all"
+      ? data.history
+      : data.history.filter(
+          (event) =>
+            event.accountId === selectedAccount ||
+            selectedPosts.some((post) => post.id === event.postId),
+        );
+  const editableAccounts = data.accounts.filter(
+    (account) => !account.planPaused && account.status === "connected",
+  );
+  const canEditFollowers =
+    selectedAccount === "legacy"
+      ? !data.accounts.length
+      : Boolean(selectedInstagram && !selectedInstagram.planPaused);
+  function selectAccount(accountId: string) {
+    setSelectedAccount(accountId);
+    setTerm("");
+    setStatus("all");
+    setAccountFilter("all");
+    setFrom("");
+    setUntil("");
+    setEditing(null);
+    setComposerKey((key) => key + 1);
+    setError("");
+  }
   const notify = useCallback((s: string) => {
     setNotice(s);
-    setTimeout(() => setNotice(""), 6000);
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(""), 6000);
   }, []);
   const refresh = useCallback(async (workspace: string) => {
+    const version = ++refreshVersion.current;
+    const session = sessionVersion.current;
     const authenticatedUid = firebaseClient()?.auth.currentUser?.uid;
-    const state = await request<State>("state", "GET", undefined, workspace);
-    const media = await Promise.all(
-      state.media.map(async (m) => {
-        let url = urls.current.get(m.id);
-        if (!url) {
-          try {
-            url = await mediaBlob(m.id, workspace);
-            urls.current.set(m.id, url);
-          } catch {}
-        }
-        return { ...m, url };
-      }),
-    );
-    if (
+    const current = () =>
       mounted.current &&
-      firebaseClient()?.auth.currentUser?.uid === authenticatedUid
-    )
-      setData({ ...state, media });
+      sessionVersion.current === session &&
+      firebaseClient()?.auth.currentUser?.uid === authenticatedUid;
+    const state = await request<State>("state", "GET", undefined, workspace);
+    if (!current() || version !== refreshVersion.current) return;
+    setSelectedAccount((current) => {
+      if (current === "all" && state.workspace.subscription.plan === "pro")
+        return current;
+      if (state.accounts.some((account) => account.id === current))
+        return current;
+      if (current === "legacy" && state.followers) return current;
+      return (
+        state.accounts.find((account) => !account.planPaused)?.id ??
+        (state.followers ? "legacy" : (state.accounts[0]?.id ?? "legacy"))
+      );
+    });
+    urls.current.retain(new Set(state.media.map((m) => m.id)));
+    setData({
+      ...state,
+      media: state.media.map((m) => ({ ...m, url: urls.current.get(m.id) })),
+    });
+    for (const media of state.media) {
+      if (urls.current.get(media.id)) continue;
+      void urls.current.load(media.id, workspace).then((url) => {
+        if (!url || !current()) return;
+        setData((latest) => ({
+          ...latest,
+          media: latest.media.map((m) =>
+            m.id === media.id ? { ...m, url } : m,
+          ),
+        }));
+      });
+    }
+  }, []);
+  const invalidateSession = useCallback(() => {
+    ++sessionVersion.current;
+    ++refreshVersion.current;
+    urls.current.clear();
   }, []);
   useEffect(() => {
     mounted.current = true;
     const c = firebaseClient();
     if (!c) {
-      setTimeout(() => setReady(true), 0);
-      return;
+      const timer = setTimeout(() => setReady(true), 0);
+      return () => {
+        clearTimeout(timer);
+        mounted.current = false;
+      };
     }
-    return onAuthStateChanged(c.auth, async (u) => {
+    const unsubscribe = onAuthStateChanged(c.auth, async (u) => {
+      const session = ++sessionVersion.current;
+      ++refreshVersion.current;
+      urls.current.clear();
+      setWs("");
+      setSelectedAccount("");
+      setData(initialState);
       setUser(u);
       setReady(true);
       setError("");
@@ -156,8 +250,8 @@ export function App() {
         setScreen("dashboard");
         setEditing(null);
         setData(initialState);
-        for (const url of urls.current.values()) URL.revokeObjectURL(url);
-        urls.current.clear();
+        clearTimeout(noticeTimer.current);
+        setNotice("");
         return;
       }
       try {
@@ -166,17 +260,38 @@ export function App() {
           "POST",
           {},
         );
+        if (!mounted.current || sessionVersion.current !== session) return;
         await refresh(boot.workspaceId);
-        if (c.auth.currentUser?.uid === u.uid) setWs(boot.workspaceId);
+        if (mounted.current && sessionVersion.current === session)
+          setWs(boot.workspaceId);
       } catch (e) {
-        setError((e as Error).message);
+        if (mounted.current && sessionVersion.current === session)
+          setError((e as Error).message);
       }
     });
-  }, [refresh]);
+    return () => {
+      mounted.current = false;
+      invalidateSession();
+      unsubscribe();
+      clearTimeout(noticeTimer.current);
+    };
+  }, [refresh, invalidateSession]);
   useEffect(() => {
     if (!user || !ws) return;
+    let polling = false;
     const id = setInterval(() => {
-      void refresh(ws).catch(() => {});
+      if (
+        polling ||
+        actionPending.current ||
+        document.visibilityState === "hidden"
+      )
+        return;
+      polling = true;
+      void refresh(ws)
+        .catch(() => {})
+        .finally(() => {
+          polling = false;
+        });
     }, 15000);
     return () => clearInterval(id);
   }, [user, ws, refresh]);
@@ -185,27 +300,76 @@ export function App() {
     setMenu(false);
     setTerm("");
     setStatus("all");
+    setAccountFilter("all");
+    setFrom("");
+    setUntil("");
   }
-  function compose(day?: string, p?: Post) {
-    setEditing(p ?? null);
+  function compose(day?: string, p?: ComposerInitial) {
+    const existing = p?.id
+      ? data.posts.find((post) => post.id === p.id)
+      : undefined;
+    if (
+      existing &&
+      data.accounts.find((account) => account.id === existing.accountId)
+        ?.planPaused
+    ) {
+      go("accounts");
+      notify("Ative esta conta no plano antes de editar a publicação.");
+      return;
+    }
+    if (
+      existing &&
+      (["processing", "published"].includes(existing.status) ||
+        existing.uncertain)
+    ) {
+      go("posts");
+      notify(
+        "Consulte o resultado na lista de publicações. A edição não está disponível durante ou após o envio.",
+      );
+      return;
+    }
+    const prepared =
+      p &&
+      p.accountId &&
+      !editableAccounts.some((account) => account.id === p.accountId)
+        ? { ...p, accountId: "" }
+        : p;
+    setEditing(
+      prepared ??
+        (selectedInstagram && !selectedInstagram.planPaused
+          ? { accountId: selectedInstagram.id }
+          : null),
+    );
     setDate(day ?? formatInTimeZone(new Date(), timezone, "yyyy-MM-dd"));
     setComposerKey((v) => v + 1);
     go("create");
   }
-  async function execute(action: () => Promise<void>, success?: string) {
+  async function execute(
+    action: () => Promise<void | false>,
+    success?: string,
+  ) {
+    if (actionPending.current) return;
+    actionPending.current = true;
+    ++refreshVersion.current;
     setBusy(true);
     setError("");
     try {
-      await action();
+      const result = await action();
+      if (result === false) return;
       await refresh(ws);
       if (success) notify(success);
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      actionPending.current = false;
       setBusy(false);
     }
   }
   async function save(input: PostInput) {
+    if (actionPending.current)
+      throw Error("Aguarde a operação atual terminar.");
+    actionPending.current = true;
+    ++refreshVersion.current;
     setBusy(true);
     try {
       await request("posts", "POST", input, ws);
@@ -216,100 +380,152 @@ export function App() {
           : "Publicação registrada na fila do servidor.",
       );
       setEditing(null);
+      setSelectedAccount(input.accountId || "legacy");
       go("posts");
     } finally {
+      actionPending.current = false;
       setBusy(false);
     }
   }
-  async function upload(files: FileList): Promise<Media[]> {
+  async function upload(files: File[], onProgress?: (message: string) => void): Promise<Media[]> {
+    const session = sessionVersion.current;
+    const guard = () => {
+      if (!mounted.current || sessionVersion.current !== session)
+        throw Error("A sessão mudou. Entre novamente para enviar as mídias.");
+    };
+    guard();
+    const selected: File[] = [];
     const output: Media[] = [];
-    for (const file of Array.from(files)) {
-      if (!["image/jpeg", "video/mp4", "video/quicktime"].includes(file.type))
-        throw Error("Use JPEG, MP4 ou MOV.");
-      if (file.size > (file.type === "image/jpeg" ? 8 : 300) * 1024 * 1024)
-        throw Error("Arquivo excede o limite de tamanho.");
+    for (const file of files) {
+      onProgress?.(`Preparando “${file.name}”…`);
+      if (![...imageUploadTypes, "video/mp4", "video/quicktime"].includes(file.type))
+        throw Error(`“${file.name}”: use uma foto JPEG, PNG ou WebP, ou um vídeo MP4/MOV.`);
+      if (file.type.startsWith("video/") && file.size > 300 * 1024 * 1024)
+        throw Error(`“${file.name}”: o vídeo ultrapassa 300 MB. Exporte uma versão mais leve.`);
+      guard();
+      try {
+        selected.push(file.type.startsWith("image/") ? await prepareImage(file) : file);
+      } catch (error) {
+        throw Error(`“${file.name}”: ${(error as Error).message}`);
+      }
+      guard();
+    }
+    for (const file of selected) {
+      guard();
       const meta = await probe(file);
+      guard();
       const id = crypto.randomUUID(),
         path = `pending/${ws}/${id}`;
+      onProgress?.(`Enviando “${file.name}”…`);
       await new Promise<void>((resolve, reject) => {
         uploadBytesResumable(ref(firebaseClient()!.storage, path), file, {
           contentType: file.type,
-        }).on("state_changed", undefined, reject, () => resolve());
+        }).on("state_changed", (snapshot) => {
+          const percent = Math.round(snapshot.bytesTransferred / snapshot.totalBytes * 100);
+          onProgress?.(`Enviando “${file.name}”… ${percent}%`);
+        }, (error) => reject(Error(error.code === "storage/retry-limit-exceeded"
+          ? "O envio da imagem não conseguiu conectar ao armazenamento. Tente novamente; se persistir, verifique a configuração do Firebase Storage."
+          : error.code === "storage/unauthorized"
+            ? "O armazenamento recusou o envio. Verifique sua sessão e as permissões de mídia desta conta."
+            : `Não foi possível enviar “${file.name}”: ${error.message}`)), () => resolve());
       });
+      guard();
+      onProgress?.(`Validando “${file.name}” no servidor…`);
       await request(
         "media",
         "POST",
         { id, name: file.name, mime: file.type, size: file.size, ...meta },
         ws,
       );
+      guard();
       const m: Media = {
         id,
         name: file.name,
         mime: file.type,
         size: file.size,
-        path,
+        path: `workspaces/${ws}/private/${id}`,
         ...meta,
         createdAt: new Date().toISOString(),
         url: URL.createObjectURL(file),
       };
+      // The server has finalized this upload. Adopt it immediately rather than
+      // resetting the editor through a full workspace refresh.
+      ++refreshVersion.current;
       urls.current.set(id, m.url!);
+      setData((latest) => ({ ...latest, media: [...latest.media.filter((item) => item.id !== id), m] }));
       output.push(m);
     }
-    await refresh(ws);
     return output;
   }
-  async function saveFollowers(next: Followers) {
-    await request("followers", "PUT", next, ws);
-    setData((d) => ({ ...d, followers: next }));
+  async function saveFollowers(next: Followers, importing = false) {
+    ++refreshVersion.current;
+    const session = sessionVersion.current;
+    if (!canEditFollowers)
+      throw Error("Selecione uma conta ativa para gerenciar seus seguidores.");
+    const accountId =
+      selectedAccount === "legacy" ? undefined : selectedAccount;
+    await request(importing ? "followers/import" : "followers", "PUT", next, ws, accountId);
+    ++refreshVersion.current;
+    if (sessionVersion.current === session)
+      setData((d) =>
+        accountId
+          ? {
+              ...d,
+              followersByAccount: {
+                ...d.followersByAccount,
+                [accountId]: next,
+              },
+            }
+          : { ...d, followers: next },
+      );
   }
-  async function importFile(file: File, kind: "zip" | "backup") {
+  async function importFile(input: File | File[], kind: "zip" | "backup") {
+    const files = Array.isArray(input) ? input : [input];
+    const file = files[0];
+    if (!file) return;
+    if (!canEditFollowers) {
+      setError("Escolha uma conta ativa antes de importar os dados.");
+      return;
+    }
     await execute(async () => {
       if (file.size > 100 * 1024 * 1024) throw Error("Arquivo excede limite.");
       if (kind === "zip") {
-        const next = await importZip(file, followers),
-          diff = differences(followers.followers, next.followers);
+        const next = await importFollowerFiles(files, followers),
+          diff = compareFollowerImports(followers, next, new Date().toISOString());
         if (
           !confirm(
-            `Importar ${next.following.length} seguindo e ${next.followers.length} seguidores? ${diff.added.length} novos e ${diff.removed.length} ausentes em relação à exportação anterior. Marcações serão preservadas.${next.source?.partial ? " A exportação pode estar parcial." : ""}`,
+            `Importar ${next.following.length} seguindo e ${next.followers.length} seguidores? ${diff.baseline ? "Esta lista será a base para detectar entradas e saídas nas próximas importações." : `${diff.gained} novos ou retornaram e ${diff.lost} ausentes desde a lista anterior. A comparação será guardada no histórico de seguidores.`} Marcações serão preservadas.${diff.partial ? " Uma das listas pode estar parcial: ausências precisam ser conferidas." : ""}`,
           )
         )
-          return;
-        await saveFollowers(next);
+          return false;
+        await saveFollowers(next, true);
       } else {
         const raw = JSON.parse(await file.text());
         if (
           !confirm(
-            "Restaurar os dados deste backup? Marcações atuais serão preservadas e posts restaurados serão rascunhos sem agendamento.",
+            `Restaurar os dados deste backup em ${selectedInstagram ? "@" + selectedInstagram.username : "sua lista anterior"}? Marcações atuais serão preservadas e posts restaurados serão rascunhos sem agendamento.`,
           )
         )
-          return;
+          return false;
         const next = restoreFollowers(raw, followers);
         await saveFollowers(next);
-        for (const p of Array.isArray(raw.posts) ? raw.posts : [])
-          await request(
-            "posts",
-            "POST",
-            {
-              type: ["post", "reel", "carousel", "story"].includes(p.type)
-                ? p.type
-                : "post",
-              caption: String(p.caption ?? "").slice(0, 2200),
-              accountId: "",
-              mediaIds: [],
-              scheduledAt: null,
-              intent: "draft",
-            },
-            ws,
-          );
+        await restoreDraftPosts(raw.posts);
       }
     }, "Importação concluída.");
   }
   function backup() {
+    if (selectedAccount === "all") {
+      setError("Escolha uma conta para baixar o backup dela.");
+      return;
+    }
     download(
       {
-        format: "lup-media-pro-v1",
+        format: "lup-media-pro-v2",
+        instagramAccountId:
+          selectedAccount === "legacy" ? null : selectedAccount,
+        instagramUsername: selectedInstagram?.username ?? null,
         savedAt: new Date().toISOString(),
-        posts: data.posts,
+        posts: selectedPosts,
         followers,
         media: data.media.map(({ url, ...m }) => {
           void url;
@@ -356,58 +572,64 @@ export function App() {
       const legacyPosts = JSON.parse(
         localStorage.getItem(legacyKeys[2]) ?? "[]",
       );
-      for (const p of Array.isArray(legacyPosts) ? legacyPosts : [])
-        await request(
-          "posts",
-          "POST",
-          {
-            type: ["post", "carousel", "reel", "story"].includes(p.type)
-              ? p.type
-              : "post",
-            caption: String(p.caption ?? "").slice(0, 2200),
-            accountId: "",
-            mediaIds: [],
-            scheduledAt: null,
-            intent: "draft",
-          },
-          ws,
-        );
+      await restoreDraftPosts(legacyPosts);
     }, "Lista anterior migrada.");
   }
-  function exportCsv() {
-    const rows = [
-      ["id", "tipo", "status", "data_utc", "legenda", "erro"],
-      ...data.posts.map((p) => [
-        p.id,
-        p.type,
-        p.status,
-        p.scheduledAt ?? "",
-        p.caption,
-        p.error ?? "",
-      ]),
-    ];
-    const csv = rows
-      .map((row) =>
-        row
-          .map(
-            (v) =>
-              '"' +
-              (/^[=+@-]/.test(v) ? "'" : "") +
-              v.replaceAll('"', '""') +
-              '"',
-          )
-          .join(";"),
-      )
-      .join("\r\n");
-    download(csv, "lup-media-pro-publicacoes.csv", "text/csv;charset=utf-8");
+  async function restoreDraftPosts(posts: unknown) {
+    if (posts !== undefined && !Array.isArray(posts))
+      throw Error("Lista de publicações inválida no backup.");
+    if (Array.isArray(posts) && posts.length)
+      await request(
+        "posts/restore",
+        "POST",
+        {
+          posts,
+          accountId: selectedAccount === "legacy" ? "" : selectedAccount,
+        },
+        ws,
+      );
   }
-  const visible = data.posts.filter(
-    (p) =>
-      (status === "all" || p.status === status) &&
-      (accountFilter === "all" || p.accountId === accountFilter) &&
-      p.caption.toLowerCase().includes(term.toLowerCase()) &&
-      (!from || (p.scheduledAt ?? "") >= from) &&
-      (!until || (p.scheduledAt ?? "").slice(0, 10) <= until),
+  async function connectInstagram(accountId?: string) {
+    await execute(async () => {
+      setInstagramConnection(null);
+      const result = await request<{ url: string } | { hostedUrl: string; message: string }>(
+        "instagram/connect",
+        "POST",
+        {},
+        ws,
+        accountId,
+      );
+      if ("hostedUrl" in result) {
+        setInstagramConnection(result);
+        return false;
+      }
+      window.location.assign(result.url);
+    });
+  }
+  function exportCsv() {
+    download(
+      postsCsv(visible, timezone),
+      "lup-media-pro-publicacoes.csv",
+      "text/csv;charset=utf-8",
+    );
+  }
+  const visible = filterPosts(
+    selectedPosts,
+    {
+      status,
+      account: accountFilter,
+      term,
+      from,
+      until,
+    },
+    timezone,
+  );
+  const visibleMedia = data.media.filter(
+    (media) =>
+      media.name
+        .toLocaleLowerCase("pt-BR")
+        .includes(term.trim().toLocaleLowerCase("pt-BR")) &&
+      (status === "all" || media.mime.startsWith(status)),
   );
   const postList = (posts: Post[]) =>
     posts.length ? (
@@ -421,8 +643,20 @@ export function App() {
             </div>
             <div className="itemcore">
               <b>{p.caption.slice(0, 110) || "Sem legenda"}</b>
+              <p className="post-account">
+                {data.accounts.find((account) => account.id === p.accountId)
+                  ?.username
+                  ? `@${data.accounts.find((account) => account.id === p.accountId)!.username}`
+                  : "Conta ainda não escolhida"}
+              </p>
+              {data.accounts.find((account) => account.id === p.accountId)
+                ?.planPaused && (
+                <p className="info-alert">
+                  Conta pausada no plano. O agendamento não será enviado.
+                </p>
+              )}
               <p>
-                {p.type} •{" "}
+                {typeNames[p.type]} •{" "}
                 {p.scheduledAt
                   ? formatInTimeZone(
                       p.scheduledAt,
@@ -454,15 +688,36 @@ export function App() {
               <button
                 onClick={() =>
                   compose(undefined, {
-                    ...p,
-                    id: undefined as unknown as string,
-                    revision: undefined as unknown as number,
-                    status: "draft",
+                    type: p.type,
+                    caption: p.caption,
+                    accountId: p.accountId,
+                    mediaIds: p.mediaIds,
+                    scheduledAt: null,
                   })
                 }
               >
                 Duplicar
               </button>
+              {subscription.plan === "pro" &&
+                editableAccounts.some(
+                  (account) => account.id !== p.accountId,
+                ) && (
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      setSelectedAccount("all");
+                      compose(undefined, {
+                        type: p.type,
+                        caption: p.caption,
+                        mediaIds: p.mediaIds,
+                        accountId: "",
+                        scheduledAt: null,
+                      });
+                    }}
+                  >
+                    Copiar para outra conta
+                  </button>
+                )}
               {p.status === "scheduled" && (
                 <button
                   onClick={() =>
@@ -497,6 +752,7 @@ export function App() {
                 </button>
               )}
               <button
+                disabled={busy || p.status === "processing" || p.uncertain}
                 onClick={() => {
                   if (confirm("Excluir esta publicação?"))
                     void execute(async () => {
@@ -575,19 +831,41 @@ export function App() {
       </main>
     );
   if (!user) return <Auth />;
-  if (!ws && !error)
+  if (!ws)
     return (
       <main className="auth-shell">
-        <p role="status">Preparando seu workspace…</p>
+        <section className="procard auth-card">
+          {error ? (
+            <>
+              <p role="alert">{error}</p>
+              <button
+                className="gradientbtn fullwidth"
+                onClick={() => window.location.reload()}
+              >
+                Tentar novamente
+              </button>
+              <button
+                className="qsmall"
+                onClick={() => void signOut(firebaseClient()!.auth)}
+              >
+                Sair da conta
+              </button>
+            </>
+          ) : (
+            <p role="status">Preparando seu workspace…</p>
+          )}
+        </section>
       </main>
     );
   const today = formatInTimeZone(new Date(), timezone, "yyyy-MM-dd");
   const editor = (
     <Composer
-      key={composerKey}
-      initial={editing}
+      key={`${composerKey}:${selectedAccount}`}
+      initial={
+        editing ?? (selectedAccount === "all" ? { accountId: "" } : null)
+      }
       date={date || today}
-      accounts={data.accounts}
+      accounts={editableAccounts}
       media={data.media}
       timezone={timezone}
       onSave={save}
@@ -616,17 +894,19 @@ export function App() {
           </span>
         </div>
         <nav className="sidenav" aria-label="Menu principal">
-          {nav.map(([id, label, Icon]) => (
-            <button
-              key={id}
-              className={screen === id ? "active" : ""}
-              onClick={() => go(id)}
-              title={label}
-            >
-              <Icon />
-              <span className="nav-label">{label}</span>
-            </button>
-          ))}
+          {nav
+            .filter(([id]) => id !== "plan-manager" || data.platformAdmin)
+            .map(([id, label, Icon]) => (
+              <button
+                key={id}
+                className={screen === id ? "active" : ""}
+                onClick={() => go(id)}
+                title={label}
+              >
+                <Icon />
+                <span className="nav-label">{label}</span>
+              </button>
+            ))}
         </nav>
         <div className="sidefoot">
           <b>LUP Soluções Inteligentes</b>
@@ -661,17 +941,64 @@ export function App() {
                   : nav.find((n) => n[0] === screen)?.[1]}
               </h1>
               <p>
-                Planeje seu conteúdo e organize seu Instagram em um só lugar.
+                {screen === "plan-manager"
+                  ? "Gerencie clientes, solicitações e preços dos planos."
+                  : "Planeje seu conteúdo e organize seu Instagram em um só lugar."}
               </p>
             </div>
           </div>
-          <div className="topbar-right">
-            <button className="gradientbtn" onClick={() => compose()}>
-              <Plus size={16} />
-              Novo agendamento
-            </button>
-          </div>
+          {screen !== "plan-manager" && (
+            <div className="topbar-right">
+              <label className="account-switcher">
+                Conta selecionada
+                <select
+                  className="proselect"
+                  aria-label="Conta selecionada"
+                  disabled={busy}
+                  value={selectedAccount}
+                  onChange={(event) => selectAccount(event.target.value)}
+                >
+                  {subscription.plan === "pro" && (
+                    <option value="all">Todas as contas</option>
+                  )}
+                  {(!data.accounts.length ||
+                    data.followers ||
+                    data.posts.some((post) => !post.accountId)) && (
+                    <option value="legacy">Sem conta / lista anterior</option>
+                  )}
+                  {data.accounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      @{account.username}
+                      {account.planPaused ? " · Pausada" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                disabled={busy}
+                className="gradientbtn"
+                onClick={() => compose()}
+              >
+                <Plus size={16} />
+                Novo agendamento
+              </button>
+            </div>
+          )}
         </header>
+        {screen !== "plan-manager" && subscription.status === "suspended" && (
+          <div className="error-alert" role="alert">
+            Sua assinatura está suspensa. Os dados continuam preservados e os
+            envios estão pausados. Entre em contato com a administração para
+            reativar.
+          </div>
+        )}
+        {screen !== "plan-manager" && selectedInstagram?.planPaused && (
+          <div className="info-alert">
+            @{selectedInstagram.username} está pausada no plano. Seus dados
+            continuam disponíveis para consulta e backup; os agendamentos não
+            serão enviados.
+          </div>
+        )}
         {error && (
           <div className="error-alert" role="alert">
             {error}
@@ -702,7 +1029,7 @@ export function App() {
                     <div>
                       <div className="statlabel">{label as string}</div>
                       <strong>
-                        {data.posts.filter((p) => p.status === s).length}
+                        {selectedPosts.filter((p) => p.status === s).length}
                       </strong>
                     </div>
                   </div>
@@ -712,7 +1039,8 @@ export function App() {
             </div>
             <div className="dashgrid">
               <Calendar
-                posts={data.posts}
+                posts={selectedPosts}
+                accounts={data.accounts}
                 timezone={timezone}
                 onDay={(d) => compose(d)}
                 onEdit={(p) => compose(undefined, p)}
@@ -734,7 +1062,13 @@ export function App() {
                 </div>
                 <div className="followstats">
                   <span>
-                    Na lista <b>{followers.users.length}</b>
+                    {selectedAccount === "all" ? (
+                      "Selecione uma conta para ver seus seguidores."
+                    ) : (
+                      <>
+                        Na lista <b>{followers.users.length}</b>
+                      </>
+                    )}
                   </span>
                   <span>
                     Feitos{" "}
@@ -769,7 +1103,7 @@ export function App() {
                 </p>
                 <button
                   className="linebutton fullwidth"
-                  onClick={() => go("import")}
+                  onClick={() => go("data")}
                 >
                   Importar exportação
                 </button>
@@ -781,11 +1115,13 @@ export function App() {
                   </h2>
                 </div>
                 <p className="quickname">
-                  {followers.users.find(
-                    (u) =>
-                      !followers.completed.includes(u) &&
-                      !followers.protected.includes(u),
-                  ) ?? "Nenhum perfil pendente"}
+                  {selectedAccount === "all"
+                    ? "Escolha uma conta para revisar"
+                    : (followers.users.find(
+                        (u) =>
+                          !followers.completed.includes(u) &&
+                          !followers.protected.includes(u),
+                      ) ?? "Nenhum perfil pendente")}
                 </p>
                 <button
                   className="gradientbtn fullwidth"
@@ -806,7 +1142,7 @@ export function App() {
                   </div>
                   <div className="twobtn">
                     <button className="linebutton" onClick={backup}>
-                      Backup completo
+                      Baixar backup dos dados
                     </button>
                     <button
                       className="linebutton"
@@ -825,7 +1161,8 @@ export function App() {
                   {data.accounts.length ? (
                     data.accounts.map((a) => (
                       <p className="mutedcopy" key={a.id}>
-                        @{a.username} • {a.status}
+                        @{a.username} •{" "}
+                        {accountStatusNames[a.status] ?? "Verifique a conexão"}
                       </p>
                     ))
                   ) : (
@@ -835,7 +1172,7 @@ export function App() {
                   )}
                   <button
                     className="linebutton fullwidth"
-                    onClick={() => go("settings")}
+                    onClick={() => go("accounts")}
                   >
                     Gerenciar contas
                   </button>
@@ -866,6 +1203,7 @@ export function App() {
             <Calendar
               full
               posts={visible}
+              accounts={data.accounts}
               timezone={timezone}
               onDay={(d) => compose(d)}
               onEdit={(p) => compose(undefined, p)}
@@ -904,12 +1242,13 @@ export function App() {
               <input
                 id="library-upload"
                 type="file"
-                accept="image/jpeg,video/mp4,video/quicktime"
+                accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
                 multiple
                 hidden
                 onChange={(e) => {
-                  const f = e.target.files;
-                  if (f)
+                  const f = Array.from(e.target.files ?? []);
+                  e.target.value = "";
+                  if (f.length)
                     void execute(async () => {
                       await upload(f);
                     }, "Mídia enviada.");
@@ -925,173 +1264,203 @@ export function App() {
               MB usados • Arquivos privados do workspace
             </p>
             <div className="librarygrid">
-              {data.media
-                .filter(
-                  (m) =>
-                    m.name.toLowerCase().includes(term.toLowerCase()) &&
-                    (status === "all" || m.mime.startsWith(status)),
-                )
-                .map((m) => (
-                  <article className="libtile" key={m.id}>
-                    <div className="mediaimg">
-                      <MediaView media={m} />
-                    </div>
-                    <div className="libfoot">
-                      <span className="libname">{m.name}</span>
-                      <button
-                        onClick={() =>
-                          compose(undefined, {
-                            mediaIds: [m.id],
-                            type: m.mime.startsWith("video") ? "reel" : "post",
-                            caption: "",
-                            accountId: "",
-                            scheduledAt: null,
-                          } as Post)
-                        }
-                      >
-                        Usar na publicação
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm("Excluir esta mídia da biblioteca?"))
-                            void execute(async () => {
-                              await request(
-                                `media/${m.id}`,
-                                "DELETE",
-                                undefined,
-                                ws,
-                              );
-                            }, "Mídia excluída.");
-                        }}
-                      >
-                        Excluir
-                      </button>
-                    </div>
-                  </article>
-                ))}
+              {visibleMedia.map((m) => (
+                <article className="libtile" key={m.id}>
+                  <div className="mediaimg">
+                    <MediaView media={m} />
+                  </div>
+                  <div className="libfoot">
+                    <span className="libname">{m.name}</span>
+                    <button
+                      onClick={() =>
+                        compose(undefined, {
+                          mediaIds: [m.id],
+                          type: m.mime.startsWith("video") ? "reel" : "post",
+                          caption: "",
+                          accountId: "",
+                          scheduledAt: null,
+                        })
+                      }
+                    >
+                      Usar na publicação
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm("Excluir esta mídia da biblioteca?"))
+                          void execute(async () => {
+                            await request(
+                              `media/${m.id}`,
+                              "DELETE",
+                              undefined,
+                              ws,
+                            );
+                          }, "Mídia excluída.");
+                      }}
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                </article>
+              ))}
             </div>
-            {!data.media.length && (
+            {!visibleMedia.length && (
               <div className="empty-state">
-                Sua biblioteca ainda está vazia. Adicione uma imagem ou vídeo.
+                {data.media.length
+                  ? "Nenhuma mídia encontrada com esses filtros."
+                  : "Sua biblioteca ainda está vazia. Adicione uma imagem ou vídeo."}
               </div>
             )}
           </>
         )}
-        {["followers", "quick", "protected", "history"].includes(screen) && (
+        {["followers", "quick", "history"].includes(screen) && (
           <>
-            <FollowerManager
-              key={screen}
-              data={followers}
-              mode={screen}
-              onSave={saveFollowers}
-              onImport={() => go("import")}
-            />
-            {screen === "history" && (
-              <section className="procard" style={{ marginTop: 15 }}>
-                <h2>Histórico de publicação</h2>
-                {data.history.length ? (
-                  data.history
-                    .slice()
-                    .sort((a, b) => b.at.localeCompare(a.at))
-                    .map((h) => (
-                      <p className="mutedcopy" key={h.id}>
-                        {h.at} • {h.status ?? "Atualização"} •{" "}
-                        {h.error ?? h.postId}
-                      </p>
-                    ))
-                ) : (
-                  <p className="empty-state">Nenhuma execução registrada.</p>
-                )}
+            {selectedAccount === "all" ? (
+              <section className="procard empty-state">
+                Escolha uma conta no seletor acima para ver os seguidores e as
+                marcações dela.
               </section>
+            ) : (
+              <FollowerManager
+                key={`${screen}:${selectedAccount}`}
+                data={followers}
+                readOnly={!canEditFollowers}
+                timezone={timezone}
+                mode={screen}
+                onSave={saveFollowers}
+                onLoadChanges={(cursor) => request(`followers/changes${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, "GET", undefined, ws, selectedAccount === "legacy" ? undefined : selectedAccount)}
+                onImport={() => go("data")}
+              />
+            )}
+            {screen === "history" && (
+              <PublicationHistory
+                history={selectedHistory}
+                accounts={data.accounts}
+                posts={selectedPosts}
+                timezone={timezone}
+              />
             )}
           </>
         )}
-        {["import", "backup"].includes(screen) && (
+        {screen === "data" && (
           <div className="settings-grid">
-            <section className="settingbox">
-              <h3>Importar ZIP oficial do Instagram</h3>
-              <p>
-                Solicite “Seguidores e seguindo”, “Todo o período”, em JSON ou
-                HTML. Marcações atuais são preservadas. Diferenças entre
-                exportações não comprovam unfollows quando o período está
-                limitado.
-              </p>
-              <label className="gradientbtn" htmlFor="zip">
-                Selecionar ZIP
-              </label>
-              <input
-                id="zip"
-                type="file"
-                accept=".zip"
-                hidden
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void importFile(f, "zip");
-                  e.target.value = "";
-                }}
-              />
-            </section>
-            <section className="settingbox">
-              <h3>Backup e restauração</h3>
-              <p>
-                Exporte posts e seguidores. Fotos e vídeos devem ser guardados
-                separadamente. Publicações restauradas viram rascunhos para
-                impedir envios acidentais.
-              </p>
-              <div className="flex">
+            {selectedAccount === "all" || !canEditFollowers ? (
+              <section className="settingbox">
+                <h3>Selecione uma conta ativa</h3>
+                <p>
+                  Importações e restaurações pertencem à conta escolhida no
+                  seletor acima. O backup de uma conta pausada continua
+                  disponível.
+                </p>
                 <button className="linebutton" onClick={backup}>
                   Baixar backup
                 </button>
-                <label className="linebutton" htmlFor="backup">
-                  Restaurar JSON
-                </label>
-                <input
-                  hidden
-                  id="backup"
-                  type="file"
-                  accept=".json"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void importFile(f, "backup");
-                    e.target.value = "";
-                  }}
-                />
-              </div>
-            </section>
-            <section className="settingbox">
-              <h3>Migrar o gerenciador anterior</h3>
-              <p>
-                Importe a lista original de 1.976 perfis. Para trazer o
-                progresso de outro navegador ou do HTML aberto como arquivo,
-                exporte o backup no gerenciador original e restaure aqui.
-              </p>
-              <button
-                className="linebutton"
-                onClick={() => void migrateOriginal()}
-              >
-                Importar lista e dados locais anteriores
-              </button>
-            </section>
-            <section className="settingbox">
-              <h3>Abrir perfis</h3>
-              <p>No Android, tente abrir o aplicativo com fallback HTTPS.</p>
-              <select
-                className="proselect"
-                aria-label="Modo de abertura"
-                value={followers.linkMode}
-                onChange={(e) =>
-                  void execute(() =>
-                    saveFollowers({
-                      ...followers,
-                      linkMode: e.target.value as "app" | "web",
-                    }),
-                  )
-                }
-              >
-                <option value="app">Aplicativo, quando possível</option>
-                <option value="web">Navegador</option>
-              </select>
-            </section>
+                {data.followers && selectedAccount === "legacy" && (
+                  <div>
+                    <p>A qual conta pertence sua lista anterior?</p>
+                    {editableAccounts.map((account) => (
+                      <button
+                        key={account.id}
+                        className="linebutton"
+                        disabled={busy}
+                        onClick={() => {
+                          if (
+                            confirm(
+                              `Vincular a lista anterior a @${account.username}? Ela não será copiada para outras contas.`,
+                            )
+                          )
+                            void execute(async () => {
+                              await request(
+                                "followers/claim-legacy",
+                                "POST",
+                                { accountId: account.id },
+                                ws,
+                              );
+                              setSelectedAccount(account.id);
+                            }, "Lista vinculada.");
+                        }}
+                      >
+                        Vincular a @{account.username}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            ) : (
+              <>
+                <section className="settingbox">
+                  <h3>Importar seguidores e seguindo</h3>
+                  <p className="info-alert">
+                    Destino:{" "}
+                    {selectedInstagram
+                      ? "@" + selectedInstagram.username
+                      : "lista anterior, ainda sem conta"}
+                  </p>
+                  <p>
+                    Solicite “Seguidores e seguindo”, “Todo o período”, em JSON
+                    ou HTML. Selecione o ZIP completo ou, juntos, following.json/html e todos os arquivos followers_1, followers_2 etc. Marcações atuais são preservadas. Diferenças entre
+                    exportações não comprovam unfollows quando o período está
+                    limitado.
+                  </p>
+                  <label className="gradientbtn" htmlFor="zip">
+                    Selecionar ZIP ou arquivos JSON/HTML
+                  </label>
+                  <input
+                    id="zip"
+                    type="file"
+                    accept=".zip,.json,.html"
+                    multiple
+                    disabled={busy}
+                    hidden
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files ?? []);
+                      if (files.length) void importFile(files, "zip");
+                      e.target.value = "";
+                    }}
+                  />
+                </section>
+                <section className="settingbox">
+                  <h3>Backup e restauração</h3>
+                  <p>
+                    Exporte posts e seguidores. Fotos e vídeos devem ser
+                    guardados separadamente. Publicações restauradas viram
+                    rascunhos para impedir envios acidentais.
+                  </p>
+                  <div className="flex">
+                    <button className="linebutton" onClick={backup}>
+                      Baixar backup
+                    </button>
+                    <label className="linebutton" htmlFor="backup">
+                      Restaurar JSON
+                    </label>
+                    <input
+                      hidden
+                      id="backup"
+                      type="file"
+                      accept=".json"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void importFile(f, "backup");
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+                </section>
+                <section className="settingbox">
+                  <h3>Migrar o gerenciador anterior</h3>
+                  <p>
+                    Importe a lista original de 1.976 perfis. Para trazer o
+                    progresso de outro navegador ou do HTML aberto como arquivo,
+                    exporte o backup no gerenciador original e restaure aqui.
+                  </p>
+                  <button
+                    className="linebutton"
+                    onClick={() => void migrateOriginal()}
+                  >
+                    Importar lista e dados locais anteriores
+                  </button>
+                </section>
+              </>
+            )}
           </div>
         )}
         {screen === "reports" && (
@@ -1118,49 +1487,152 @@ export function App() {
                   </div>
                 ))}
               </div>
+              {selectedAccount === "all" && (
+                <div className="account-report-grid">
+                  {data.accounts.map((account) => (
+                    <article className="metric" key={account.id}>
+                      <strong>@{account.username}</strong>
+                      <p>
+                        {
+                          visible.filter(
+                            (post) =>
+                              post.accountId === account.id &&
+                              post.status === "published",
+                          ).length
+                        }{" "}
+                        publicadas ·{" "}
+                        {
+                          visible.filter(
+                            (post) =>
+                              post.accountId === account.id &&
+                              post.status === "scheduled",
+                          ).length
+                        }{" "}
+                        agendadas
+                      </p>
+                      {account.planPaused && <p>Pausada no plano</p>}
+                    </article>
+                  ))}
+                </div>
+              )}
               <p className="lightnote">
                 Alcance, interações e horários recomendados: Dado indisponível.
                 Permissões de insights ainda não configuradas.
               </p>
             </section>
-            <section className="procard" style={{ marginTop: 15 }}>
-              <h2>Dados da última exportação</h2>
-              <p className="mutedcopy">
-                Seguidores: {followers.source?.followers ?? "Dado indisponível"}{" "}
-                • Seguindo: {followers.source?.following ?? "Dado indisponível"}{" "}
-                • {followers.source?.updated ?? "Sem exportação"}
-              </p>
-            </section>
+            {selectedAccount !== "all" && (
+              <section className="procard" style={{ marginTop: 15 }}>
+                <h2>Dados da última exportação</h2>
+                <p className="mutedcopy">
+                  Seguidores:{" "}
+                  {followers.source?.followers ?? "Dado indisponível"} •
+                  Seguindo: {followers.source?.following ?? "Dado indisponível"}{" "}
+                  •{" "}
+                  {followers.source
+                    ? displayDate(followers.source.updated, timezone)
+                    : "Sem exportação"}
+                </p>
+              </section>
+            )}
           </>
         )}
-        {screen === "ads" && (
-          <section className="procard">
-            <h2>Gestão de anúncios</h2>
-            <p className="empty-state">
-              Módulo futuro. A configuração da Meta Marketing API será
-              independente da conexão do Instagram.
-            </p>
-          </section>
-        )}
-        {screen === "settings" && (
+        {screen === "plan-manager" &&
+          (data.platformAdmin ? (
+            <PlanManager onSelfChange={() => refresh(ws)} />
+          ) : (
+            <section className="procard empty-state">
+              Acesso restrito à administração da plataforma.
+            </section>
+          ))}
+        {screen === "accounts" && (
           <div className="settings-grid">
+            <PlanPanel
+              subscription={subscription}
+              catalog={data.planCatalog}
+              accounts={data.accounts}
+              owner={data.role === "owner"}
+              busy={busy}
+              onRequestPro={() =>
+                void execute(async () => {
+                  await request("subscription/request-pro", "POST", {}, ws);
+                }, "Seu plano Pro está ativo. Você já pode adicionar mais contas.")
+              }
+              onEssential={(accountId) =>
+                void execute(async () => {
+                  await request(
+                    "subscription/essential",
+                    "POST",
+                    { accountId },
+                    ws,
+                  );
+                }, "Plano Essencial ativado. As demais contas ficam pausadas.")
+              }
+            />
             <section className="settingbox">
               <h3>Contas do Instagram</h3>
               <p>
                 Conecte a conta profissional usando o aplicativo LUP Media Pro
                 já existente na Meta.
               </p>
+              {instagramConnection && (
+                <div className="info-alert" role="status">
+                  <p>{instagramConnection.message}</p>
+                  <div className="flex">
+                    <a className="linebutton" href={instagramConnection.hostedUrl} target="_blank" rel="noopener noreferrer">
+                      Abrir versão online
+                    </a>
+                    <button className="linebutton" disabled={busy} onClick={() => void execute(async () => {}, "Lista de contas atualizada.")}>
+                      Já conectei, atualizar contas
+                    </button>
+                  </div>
+                </div>
+              )}
               {data.accounts.map((a) => (
                 <div className="account-card" key={a.id}>
                   <Instagram />
                   <div className="info">
                     <b>@{a.username}</b>
                     <p>
-                      {a.status} • Token válido até{" "}
+                      {a.planPaused && a.status !== "disconnected"
+                        ? "Pausada no plano"
+                        : (accountStatusNames[a.status] ??
+                          "Verifique a conexão")}{" "}
+                      • Acesso válido até{" "}
                       {new Date(a.expiresAt).toLocaleDateString("pt-BR")}
                     </p>
                   </div>
+                  {a.planPaused && a.status !== "disconnected" && (
+                    <button
+                      className="linebutton"
+                      disabled={busy}
+                      onClick={() => {
+                        if (
+                          confirm(
+                            `Ativar @${a.username}? Os agendamentos pendentes dessa conta voltarão a ser executados, incluindo horários que já passaram.`,
+                          )
+                        )
+                          void execute(async () => {
+                            await request(
+                              `accounts/${a.id}/activate`,
+                              "POST",
+                              {},
+                              ws,
+                            );
+                          }, "Conta ativada.");
+                      }}
+                    >
+                      Ativar no plano
+                    </button>
+                  )}
                   <button
+                    className="linebutton"
+                    disabled={busy}
+                    onClick={() => void connectInstagram(a.id)}
+                  >
+                    Reconectar
+                  </button>
+                  <button
+                    disabled={busy || a.status === "disconnected"}
                     className="linebutton"
                     onClick={() => {
                       if (
@@ -1184,25 +1656,35 @@ export function App() {
               ))}
               <button
                 className="gradientbtn button-icon"
-                onClick={() =>
-                  void execute(async () => {
-                    const d = await request<{ url: string }>(
-                      "instagram/connect",
-                      "POST",
-                      {},
-                      ws,
-                    );
-                    window.location.assign(d.url);
-                  })
+                disabled={
+                  busy ||
+                  !["owner", "admin"].includes(data.role) ||
+                  data.accounts.filter((account) => !account.planPaused)
+                    .length >= plans[subscription.plan].accountLimit
                 }
+                onClick={() => void connectInstagram()}
               >
                 <Instagram size={16} />
-                Conectar / reconectar Instagram
+                Adicionar conta do Instagram
               </button>
+              {data.accounts.filter((account) => !account.planPaused).length >=
+                plans[subscription.plan].accountLimit && (
+                <p className="lightnote">
+                  {subscription.plan === "pro"
+                    ? "As três vagas do Pro estão em uso. Reconecte uma conta existente ou desconecte uma para liberar uma vaga."
+                    : "Sua vaga do Essencial está em uso. Reconecte a conta existente ou migre para o Pro para adicionar mais contas."}
+                </p>
+              )}
             </section>
+          </div>
+        )}
+        {screen === "settings" && (
+          <div className="settings-grid">
             <section className="settingbox">
-              <h3>Workspace</h3>
+              <h3>Seu espaço de trabalho</h3>
               <SettingsForm
+                key={`${data.workspace.name}:${timezone}`}
+                busy={busy}
                 name={data.workspace.name}
                 timezone={timezone}
                 onSave={(d) =>
@@ -1211,18 +1693,30 @@ export function App() {
                   }, "Configurações salvas.")
                 }
               />
-              <p className="lightnote">
-                ID: {ws}. Papéis disponíveis no modelo: proprietário,
-                administrador, editor e visualizador.
-              </p>
             </section>
             <section className="settingbox">
-              <h3>Inteligência artificial</h3>
+              <h3>Abrir perfis</h3>
               <p>
-                Não configurada. O editor continua disponível para escrita
-                manual. A integração deve ser habilitada no servidor com um
-                provedor e credenciais próprios.
+                Escolha se os perfis abrem no aplicativo do Instagram ou no
+                navegador.
               </p>
+              <select
+                className="proselect"
+                aria-label="Modo de abertura"
+                disabled={!canEditFollowers || busy}
+                value={followers.linkMode}
+                onChange={(e) =>
+                  void execute(() =>
+                    saveFollowers({
+                      ...followers,
+                      linkMode: e.target.value as "app" | "web",
+                    }),
+                  )
+                }
+              >
+                <option value="app">Aplicativo, quando possível</option>
+                <option value="web">Navegador</option>
+              </select>
             </section>
           </div>
         )}
@@ -1239,10 +1733,12 @@ export function App() {
   );
 }
 function SettingsForm({
+  busy,
   name,
   timezone,
   onSave,
 }: {
+  busy: boolean;
   name: string;
   timezone: string;
   onSave: (v: { name: string; timezone: string }) => Promise<void>;
@@ -1264,6 +1760,7 @@ function SettingsForm({
         className="proinput"
         value={n}
         required
+        maxLength={100}
         onChange={(e) => setN(e.target.value)}
       />
       <label className="formlabel" htmlFor="ws-timezone">
@@ -1276,7 +1773,7 @@ function SettingsForm({
         required
         onChange={(e) => setTz(e.target.value)}
       />
-      <button className="linebutton" style={{ marginTop: 10 }}>
+      <button disabled={busy} className="linebutton" style={{ marginTop: 10 }}>
         Salvar configurações
       </button>
     </form>
