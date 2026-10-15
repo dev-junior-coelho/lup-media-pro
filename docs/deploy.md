@@ -89,3 +89,8 @@ App Hosting `build-2026-10-15-005` ativado e Firebase Hosting publicado no ender
 Comparações entre importações agora ficam arquivadas no servidor, por conta, com paginação e indicação do intervalo e de listas possivelmente parciais. A aba Seguidores inclui Quem deixou de seguir · Histórico. A primeira lista válida estabelece a base; uma lista de seguidores já existente pode servir de base à próxima importação. Snapshots anteriores continuam preservados, mas o arquivo de eventos começa com importações desta funcionalidade.
 
 Validação: 96 testes de código, TypeScript, ESLint, compilação de produção e os dois testes de navegador de seguidores, no desktop/celular. O teste online confirmou importações sintéticas, saída detectada, histórico persistente após recarga e paginação no domínio principal, além de upload privado, ajuste de imagem, rascunhos e planos. Conta e registros temporários foram removidos; nenhuma publicação no Instagram foi realizada. Detalhes em [Histórico de seguidores](historico-de-seguidores.md).
+
+
+## Cache de desenvolvimento local
+
+`npm run dev` usa explicitamente a porta 3000 e o diretório `.next-local`; builds de produção continuam em `.next`. O override `LUP_NEXT_DIST_DIR` continua disponível para testes. Isso evita que um build de produção remova o cache usado pelo servidor local e que uma segunda execução passe silenciosamente para 3001. Se a porta 3000 já estiver ocupada, use a instância existente ou encerre-a antes de reiniciar. `.next-local` é ignorado pelo Git e pelo empacotamento do App Hosting.
